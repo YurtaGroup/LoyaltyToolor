@@ -1,0 +1,386 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../theme/app_theme.dart';
+import '../providers/auth_provider.dart';
+import '../data/toolor_products.dart';
+import '../models/product.dart';
+import '../models/loyalty.dart';
+import 'product_detail_screen.dart';
+
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final _messages = <_Msg>[];
+  final _scrollCtrl = ScrollController();
+  final _inputCtrl = TextEditingController();
+  bool _typing = false;
+  bool _started = false;
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    _inputCtrl.dispose();
+    super.dispose();
+  }
+
+  void _startChat() {
+    if (_started) return;
+    _started = true;
+    final auth = context.read<AuthProvider>();
+    final name = auth.isLoggedIn ? auth.user!.name.split(' ').first : 'друг';
+    final tier = auth.loyalty?.tierName ?? 'Bronze';
+    final pts = auth.loyalty?.points ?? 0;
+
+    _addBot('Привет, $name! 👋 Я — стилист TOOLOR. Помогу подобрать образ, расскажу про акции и бонусы.');
+
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      _addBot('У тебя $tier статус и $pts баллов. Вот что могу предложить:');
+      Future.delayed(const Duration(milliseconds: 800), () {
+        _addChips(['🔥 Скидки сейчас', '👕 Подобрать образ', '⭐ Мои баллы', '📦 Box подписка']);
+      });
+    });
+  }
+
+  void _addBot(String text) {
+    setState(() => _typing = true);
+    Future.delayed(Duration(milliseconds: 400 + text.length * 8), () {
+      if (!mounted) return;
+      setState(() {
+        _typing = false;
+        _messages.add(_Msg(text: text, isUser: false));
+      });
+      _scroll();
+    });
+  }
+
+  void _addChips(List<String> options) {
+    setState(() => _messages.add(_Msg(text: '', isUser: false, chips: options)));
+    _scroll();
+  }
+
+  void _addProductCards(List<Product> products) {
+    setState(() => _messages.add(_Msg(text: '', isUser: false, products: products)));
+    _scroll();
+  }
+
+  void _sendMessage(String text) {
+    if (text.trim().isEmpty) return;
+    _inputCtrl.clear();
+    HapticFeedback.lightImpact();
+    setState(() => _messages.add(_Msg(text: text, isUser: true)));
+    _scroll();
+    _handleInput(text.trim().toLowerCase());
+  }
+
+  void _handleChip(String chip) {
+    HapticFeedback.lightImpact();
+    setState(() => _messages.add(_Msg(text: chip, isUser: true)));
+    _scroll();
+    _handleInput(chip.toLowerCase());
+  }
+
+  void _handleInput(String input) {
+    if (input.contains('скидк') || input.contains('sale') || input.contains('акци')) {
+      final sale = toolorProducts.where((p) => p['originalPrice'] != null).take(4).map((p) => Product.fromMap(p)).toList();
+      _addBot('Сейчас ${sale.length} товаров со скидкой до 40%! Вот лучшие:');
+      Future.delayed(const Duration(milliseconds: 900), () => _addProductCards(sale));
+    } else if (input.contains('образ') || input.contains('подобр') || input.contains('стиль') || input.contains('outfit')) {
+      _addBot('Какой стиль тебе ближе?');
+      Future.delayed(const Duration(milliseconds: 700), () {
+        _addChips(['🏙️ Городской', '🏔️ Outdoor', '💼 Деловой', '🎒 Casual']);
+      });
+    } else if (input.contains('городск') || input.contains('urban')) {
+      final urban = toolorProducts.where((p) {
+        final sub = p['subcategory'] as String;
+        return sub.contains('Куртк') || sub.contains('Брюк') || sub.contains('Свитш');
+      }).take(3).map((p) => Product.fromMap(p)).toList();
+      _addBot('Для города рекомендую — куртка + брюки + свитшот. Вот варианты:');
+      Future.delayed(const Duration(milliseconds: 900), () => _addProductCards(urban));
+    } else if (input.contains('outdoor') || input.contains('горн')) {
+      final out = toolorProducts.where((p) {
+        final sub = p['subcategory'] as String;
+        return sub.contains('Пуховик') || sub.contains('Флис') || sub.contains('Ветровк');
+      }).take(3).map((p) => Product.fromMap(p)).toList();
+      _addBot('Для outdoor — пуховик или ветровка + флис. Вот что есть:');
+      Future.delayed(const Duration(milliseconds: 900), () => _addProductCards(out));
+    } else if (input.contains('балл') || input.contains('лояльн') || input.contains('кэшбэк') || input.contains('cashback') || input.contains('point')) {
+      final auth = context.read<AuthProvider>();
+      final l = auth.loyalty;
+      if (l != null) {
+        final left = l.nextTierThreshold - l.totalSpent;
+        _addBot('У тебя ${l.points} баллов (${l.cashbackPercent}% кэшбэк).\n\nДо ${l.tier != LoyaltyTier.platinum ? "следующего уровня осталось ${left.toStringAsFixed(0)} сом" : "максимального уровня — ты уже там! 🎉"}');
+        Future.delayed(const Duration(milliseconds: 800), () {
+          _addBot('Баллы можно списать при следующей покупке на кассе или онлайн.');
+        });
+      }
+    } else if (input.contains('box') || input.contains('подписк')) {
+      _addBot('TOOLOR Box — ежемесячная подписка. Наши стилисты подберут 3–5 вещей по твоему стилю.\n\n• Basic — 4 990 сом (3 вещи)\n• Premium — 8 990 сом (5 вещей)\n\nСкоро запуск! Хочешь, запишу тебя?');
+      Future.delayed(const Duration(milliseconds: 800), () {
+        _addChips(['✅ Да, запиши!', '🤔 Расскажи подробнее']);
+      });
+    } else if (input.contains('да') || input.contains('запиш')) {
+      _addBot('Записала! Мы напишем тебе, как только Box будет доступен. 📬');
+    } else if (input.contains('размер') || input.contains('size')) {
+      _addBot('Подскажу размер! Какой у тебя рост и вес? Например: "175 см, 70 кг"');
+    } else if (RegExp(r'\d{2,3}\s*(см)?,?\s*\d{2,3}\s*(кг)?').hasMatch(input)) {
+      _addBot('Для роста ~175 и веса ~70 рекомендую размер M в верхней одежде и M-L в брюках.\n\nНо лучше всего — примерка в нашем бутике! AsiaMall, 2 этаж, бутик 19(1) 📍');
+    } else if (input.contains('деловой') || input.contains('бизнес') || input.contains('💼')) {
+      final biz = toolorProducts.where((p) {
+        final sub = p['subcategory'] as String;
+        return sub.contains('Рубашк') || sub.contains('Брюк');
+      }).take(3).map((p) => Product.fromMap(p)).toList();
+      _addBot('Деловой стиль — рубашка + брюки. Вот подборка:');
+      Future.delayed(const Duration(milliseconds: 900), () => _addProductCards(biz));
+    } else if (input.contains('casual') || input.contains('🎒')) {
+      final cas = toolorProducts.where((p) {
+        final sub = p['subcategory'] as String;
+        return sub.contains('Худи') || sub.contains('Футболк') || sub.contains('Шорты');
+      }).take(3).map((p) => Product.fromMap(p)).toList();
+      _addBot('Casual vibes — худи + футболка + шорты:');
+      Future.delayed(const Duration(milliseconds: 900), () => _addProductCards(cas));
+    } else if (input.contains('привет') || input.contains('здравствуй') || input.contains('hello') || input.contains('hi')) {
+      _addBot('Привет! Чем могу помочь? 😊');
+      Future.delayed(const Duration(milliseconds: 700), () {
+        _addChips(['🔥 Скидки сейчас', '👕 Подобрать образ', '⭐ Мои баллы']);
+      });
+    } else if (input.contains('спасиб') || input.contains('thank')) {
+      _addBot('Всегда рада помочь! Если что — пиши. 💚');
+    } else if (input.contains('подробн') || input.contains('расскаж')) {
+      _addBot('Каждый месяц мы собираем персональный набор вещей на основе твоих предпочтений.\n\nТы получаешь коробку, примеряешь дома и оставляешь только то, что нравится. Остальное возвращаешь бесплатно!');
+    } else {
+      _addBot('Хороший вопрос! Могу помочь с подбором одежды, акциями, баллами или размерами. Что интересует?');
+      Future.delayed(const Duration(milliseconds: 700), () {
+        _addChips(['🔥 Скидки', '👕 Стиль', '⭐ Баллы', '📏 Размер']);
+      });
+    }
+  }
+
+  void _scroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent + 100, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (auth.isLoggedIn && !_started) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startChat());
+    }
+    final bot = MediaQuery.of(context).padding.bottom;
+
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(S.x16, S.x12, S.x16, S.x8),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: AppColors.accentSoft, borderRadius: BorderRadius.circular(R.sm)),
+                  child: const Icon(Icons.auto_awesome_rounded, size: 18, color: AppColors.accent),
+                ),
+                const SizedBox(width: S.x12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('TOOLOR AI', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 1, color: AppColors.textPrimary)),
+                      Text('Персональный стилист', style: TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                    ],
+                  ),
+                ),
+                if (_typing)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
+                    const SizedBox(width: 4),
+                    const Text('печатает...', style: TextStyle(fontSize: 11, color: AppColors.accent)),
+                  ]),
+              ],
+            ),
+          ),
+          Divider(color: AppColors.divider, height: 0.5),
+
+          // Messages
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollCtrl,
+              padding: const EdgeInsets.fromLTRB(S.x16, S.x12, S.x16, S.x12),
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              itemCount: _messages.length,
+              itemBuilder: (_, i) => _buildMessage(_messages[i]),
+            ),
+          ),
+
+          // Input
+          Container(
+            padding: EdgeInsets.fromLTRB(S.x16, S.x8, S.x8, S.x8 + bot),
+            decoration: const BoxDecoration(color: AppColors.surface, border: Border(top: BorderSide(color: AppColors.divider))),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _inputCtrl,
+                    style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                    decoration: const InputDecoration(
+                      hintText: 'Напишите сообщение...',
+                      contentPadding: EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x8),
+                    ),
+                    onSubmitted: _sendMessage,
+                  ),
+                ),
+                const SizedBox(width: S.x4),
+                GestureDetector(
+                  onTap: () => _sendMessage(_inputCtrl.text),
+                  child: Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [AppColors.accent, Color(0xFF7AB8F5)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(R.pill),
+                    ),
+                    child: const Icon(Icons.arrow_upward_rounded, size: 20, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessage(_Msg msg) {
+    if (msg.chips != null) return _buildChipRow(msg.chips!);
+    if (msg.products != null) return _buildProductRow(msg.products!);
+
+    return Align(
+      alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: S.x8),
+        padding: const EdgeInsets.symmetric(horizontal: S.x16, vertical: S.x12),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+        decoration: BoxDecoration(
+          color: msg.isUser ? AppColors.textPrimary : AppColors.surfaceElevated,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(R.lg),
+            topRight: const Radius.circular(R.lg),
+            bottomLeft: Radius.circular(msg.isUser ? R.lg : R.xs),
+            bottomRight: Radius.circular(msg.isUser ? R.xs : R.lg),
+          ),
+        ),
+        child: Text(
+          msg.text,
+          style: TextStyle(
+            fontSize: 14,
+            color: msg.isUser ? AppColors.textInverse : AppColors.textPrimary,
+            height: 1.45,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChipRow(List<String> chips) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.x8),
+      child: Wrap(
+        spacing: S.x8,
+        runSpacing: S.x8,
+        children: chips.map((c) => GestureDetector(
+          onTap: () => _handleChip(c),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x8),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(R.pill),
+              border: Border.all(color: AppColors.surfaceBright),
+            ),
+            child: Text(c, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
+  Widget _buildProductRow(List<Product> products) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: S.x12),
+      child: SizedBox(
+        height: 180,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemCount: products.length,
+          separatorBuilder: (_, _) => const SizedBox(width: S.x8),
+          itemBuilder: (_, i) {
+            final p = products[i];
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: p, heroTag: 'chat_${p.id}')));
+              },
+              child: Container(
+                width: 140,
+                decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(R.lg)),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(p.imageUrl, fit: BoxFit.cover, width: double.infinity,
+                            errorBuilder: (_, _, _) => Container(color: AppColors.surfaceOverlay)),
+                          if (p.isOnSale) Positioned(
+                            top: 6, left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(color: AppColors.sale, borderRadius: BorderRadius.circular(4)),
+                              child: Text('-${p.discountPercent}%', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(S.x8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          const SizedBox(height: 2),
+                          Text(p.formattedPrice, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.isOnSale ? AppColors.sale : AppColors.textPrimary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _Msg {
+  final String text;
+  final bool isUser;
+  final List<String>? chips;
+  final List<Product>? products;
+  _Msg({required this.text, required this.isUser, this.chips, this.products});
+}
