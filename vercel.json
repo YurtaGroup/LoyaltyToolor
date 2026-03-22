@@ -1,11 +1,12 @@
 {
   "outputDirectory": "build/web",
   "buildCommand": "",
-  "rewrites": [
-    { "source": "/cdn/:path(.*)", "destination": "https://toolorkg.com/wp-content/uploads/:path" }
-  ],
   "routes": [
+    { "src": "/cdn/(.*)", "dest": "https://toolorkg.com/wp-content/uploads/$1" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
+/(.*)", "dest": "/index.html" }
   ]
 }
