@@ -107,20 +107,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 64, height: 64,
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
-                      ),
-                      child: Icon(Icons.diamond_outlined, size: 28, color: AppColors.accent),
-                    ),
-                    const SizedBox(height: S.x32),
-                    Text(
-                      'TOOLOR',
-                      style: TextStyle(fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: 14, color: AppColors.textPrimary),
-                    ),
+                    Image.asset('assets/images/toolor_logo.png', width: 200),
                     const SizedBox(height: S.x8),
                     Text(
                       'LOYALTY  &  STORE',
@@ -280,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 children: [
                   Row(
                     children: [
-                      Text('TOOLOR', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 3, color: AppColors.textPrimary)),
+                      Image.asset('assets/images/toolor_logo.png', height: 16),
                       const SizedBox(width: S.x8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: S.x6, vertical: 1),
