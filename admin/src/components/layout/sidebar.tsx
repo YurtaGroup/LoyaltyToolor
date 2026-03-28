@@ -11,6 +11,7 @@ import {
   Ticket,
   MapPin,
   ScanLine,
+  Bell,
   LogOut,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const iconMap: Record<string, LucideIcon> = {
   FolderTree,
   Ticket,
   MapPin,
+  Bell,
 };
 
 export function Sidebar() {

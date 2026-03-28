@@ -630,13 +630,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                 const SizedBox(height: S.x12),
 
-                Text('ТИМУР Т.',
+                Text('TOOLOR',
                     style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary)),
                 const SizedBox(height: S.x2),
-                Text('+996 (999) 955 000',
+                Text('+996 998 844 444',
                     style: TextStyle(
                         fontSize: 13, color: AppColors.textSecondary)),
               ],

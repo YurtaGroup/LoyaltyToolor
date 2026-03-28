@@ -162,4 +162,14 @@ class ApiService {
   static Future<String?> getAccessToken() async {
     return _storage.read(key: _accessTokenKey);
   }
+
+  /// Quick connectivity check — pings the API health endpoint.
+  static Future<bool> isOnline() async {
+    try {
+      await _dio.get('/api/v1/health');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -98,7 +98,7 @@ async def update_cart_item(
     if body.quantity <= 0:
         await db.delete(item)
         await db.commit()
-        raise HTTPException(status_code=204)
+        return Response(status_code=204)
     item.quantity = body.quantity
     await db.commit()
     await db.refresh(item, ["product"])

@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Product> _saleProducts = [];
   List<Product> _newProducts = [];
   bool _isLoading = true;
+  bool _loadError = false;
 
   @override
   void initState() {
@@ -53,12 +54,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _saleProducts = items.where((p) => p.originalPrice != null).take(8).toList();
         _newProducts = items.take(10).toList();
         _isLoading = false;
+        _loadError = false;
       });
     } catch (e) {
       debugPrint('[HomeScreen] Failed to fetch products: $e');
       if (!mounted) return;
       setState(() {
         _isLoading = false;
+        _loadError = _saleProducts.isEmpty && _newProducts.isEmpty;
       });
     }
   }
@@ -154,6 +157,36 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_loadError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: S.x40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.textTertiary.withValues(alpha: 0.4)),
+              const SizedBox(height: S.x12),
+              Text('Не удалось загрузить товары', style: TextStyle(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
+              const SizedBox(height: S.x16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() { _isLoading = true; _loadError = false; });
+                  _fetchProducts();
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Повторить'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final saleProducts = _saleProducts;

@@ -31,6 +31,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   List<Map<String, dynamic>> _apiCategories = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _loadError = false;
   int _currentPage = 1;
   int _totalPages = 1;
 
@@ -131,12 +132,14 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
         _totalPages = data['pages'] as int? ?? 1;
         _isLoading = false;
         _isLoadingMore = false;
+        _loadError = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isLoadingMore = false;
+        _loadError = _products.isEmpty;
       });
     }
   }
@@ -268,18 +271,43 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _products.isEmpty
+                : _loadError
                     ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.search_off_rounded, size: 40, color: AppColors.textTertiary.withValues(alpha: 0.4)),
+                            Icon(Icons.cloud_off_rounded, size: 40, color: AppColors.textTertiary.withValues(alpha: 0.4)),
                             const SizedBox(height: S.x12),
-                            Text('Ничего не найдено', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                            Text('Не удалось загрузить товары', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                            const SizedBox(height: S.x16),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                setState(() { _isLoading = true; _loadError = false; });
+                                _fetchProducts(reset: true);
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              label: const Text('Повторить'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.accent,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md)),
+                              ),
+                            ),
                           ],
                         ),
                       )
-                    : GridView.builder(
+                    : _products.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_off_rounded, size: 40, color: AppColors.textTertiary.withValues(alpha: 0.4)),
+                                const SizedBox(height: S.x12),
+                                Text('Ничего не найдено', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                              ],
+                            ),
+                          )
+                        : GridView.builder(
                         controller: _scrollCtrl,
                         padding: const EdgeInsets.fromLTRB(S.x16, S.x8, S.x16, S.x24),
                         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),

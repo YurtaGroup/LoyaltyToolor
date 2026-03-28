@@ -19,6 +19,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   bool _isProcessing = false;
   _ScanResult? _result;
+  String? _lastScannedToken;
 
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_isProcessing || _result != null) return;
@@ -36,6 +37,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final data = resp.data;
       if (!mounted) return;
       setState(() {
+        _lastScannedToken = code;
         _result = _ScanResult(
           valid: data['valid'] == true,
           reason: data['reason'],
@@ -57,7 +59,137 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void _reset() {
     setState(() {
       _result = null;
+      _lastScannedToken = null;
       _isProcessing = false;
+    });
+  }
+
+  /// Extract user_id from QR token (first part before the first dot).
+  String? _extractUserId(String? token) {
+    if (token == null || !token.contains('.')) return null;
+    return token.split('.').first;
+  }
+
+  Future<void> _showAwardPointsDialog(_Customer customer) async {
+    final amountController = TextEditingController();
+    final userId = _extractUserId(_lastScannedToken);
+    if (userId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось определить ID пользователя')),
+        );
+      }
+      return;
+    }
+
+    final cashbackPercent = customer.cashbackPercent;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final amountText = amountController.text;
+            final amount = double.tryParse(amountText) ?? 0;
+            final points = (amount * cashbackPercent / 100).round();
+
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: Text('Начислить баллы',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Клиент: ${customer.name}',
+                      style: TextStyle(
+                          fontSize: 14, color: AppColors.textSecondary)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: TextStyle(fontSize: 16, color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'Сумма покупки (сом)',
+                      labelStyle: TextStyle(color: AppColors.textTertiary),
+                      suffixText: 'сом',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  if (amount > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentSoft,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Покупка ${amount.toStringAsFixed(0)} сом \u2192 +$points баллов ($cashbackPercent%)',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Отмена',
+                      style: TextStyle(color: AppColors.textTertiary)),
+                ),
+                TextButton(
+                  onPressed: amount > 0 && points > 0
+                      ? () => Navigator.pop(ctx, {
+                            'amount': amount,
+                            'points': points,
+                          })
+                      : null,
+                  child: Text('Начислить',
+                      style: TextStyle(
+                          color: amount > 0 && points > 0
+                              ? AppColors.accent
+                              : AppColors.textTertiary)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((result) async {
+      if (result == null || result is! Map) return;
+      final amount = result['amount'] as double;
+      final points = result['points'] as int;
+
+      try {
+        await ApiService.dio.post(
+          '/api/v1/admin/users/$userId/loyalty/adjust',
+          data: {
+            'points_change': points,
+            'description': 'Покупка в магазине: ${amount.toStringAsFixed(0)} сом',
+          },
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Начислено $points баллов для ${customer.name}'),
+          ),
+        );
+        _reset();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка начисления: $e')),
+        );
+      }
     });
   }
 
@@ -123,6 +255,23 @@ class _ScannerScreenState extends State<ScannerScreen> {
             children: [
               const Spacer(),
               if (r.valid && r.customer != null) _validCard(r.customer!) else _invalidCard(r.reason),
+              if (r.valid && r.customer != null) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showAwardPointsDialog(r.customer!),
+                    icon: const Icon(Icons.star_rounded),
+                    label: const Text('Начислить баллы', style: TextStyle(fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.gold,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              ],
               const Spacer(),
               SizedBox(
                 width: double.infinity,

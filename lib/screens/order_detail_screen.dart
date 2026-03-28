@@ -2,17 +2,103 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
-class OrderDetailScreen extends StatelessWidget {
+class OrderDetailScreen extends StatefulWidget {
   final AppOrder order;
 
   const OrderDetailScreen({super.key, required this.order});
 
   @override
+  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+}
+
+class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  late AppOrder _order;
+  bool _isCancelling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _order = widget.order;
+  }
+
+  bool get _canCancel =>
+      _order.status == 'pending' || _order.status == 'payment_uploaded' || _order.status == 'created';
+
+  Future<void> _cancelOrder() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Отменить заказ?',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: Text('Заказ ${_order.orderNumber} будет отменён.',
+            style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Нет', style: TextStyle(color: AppColors.textTertiary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Отменить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+
+    try {
+      final response = await ApiService.dio.post(
+        '/api/v1/orders/${_order.id}/cancel',
+      );
+
+      if (!mounted) return;
+
+      // Refresh order from response if available, otherwise update locally
+      if (response.data is Map<String, dynamic>) {
+        setState(() {
+          _order = AppOrder.fromJson(response.data as Map<String, dynamic>);
+          _isCancelling = false;
+        });
+      } else {
+        // Refetch order
+        try {
+          final refreshResp = await ApiService.dio.get('/api/v1/orders/${_order.id}');
+          if (mounted) {
+            setState(() {
+              _order = AppOrder.fromJson(refreshResp.data as Map<String, dynamic>);
+              _isCancelling = false;
+            });
+          }
+        } catch (_) {
+          if (mounted) setState(() => _isCancelling = false);
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Заказ отменён')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отменить заказ: $e')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Заказ ${order.orderNumber}')),
+      appBar: AppBar(title: Text('Заказ ${_order.orderNumber}')),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
@@ -24,18 +110,44 @@ class OrderDetailScreen extends StatelessWidget {
               const SizedBox(height: S.x20),
               _statusTimeline(),
               const SizedBox(height: S.x20),
-              if (order.items.isNotEmpty) ...[
+              if (_order.items.isNotEmpty) ...[
                 _itemsList(),
                 const SizedBox(height: S.x20),
               ],
               _deliveryInfo(),
-              if (order.pointsEarned != null && order.pointsEarned! > 0) ...[
+              if (_order.pointsEarned != null && _order.pointsEarned! > 0) ...[
                 const SizedBox(height: S.x20),
                 _pointsInfo(),
+              ],
+              if (_canCancel) ...[
+                const SizedBox(height: S.x20),
+                _cancelButton(),
               ],
               const SizedBox(height: S.x32),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cancelButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: OutlinedButton.icon(
+        onPressed: _isCancelling ? null : _cancelOrder,
+        icon: _isCancelling
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red))
+            : const Icon(Icons.cancel_outlined, size: 18),
+        label: Text(_isCancelling ? 'Отмена...' : 'Отменить заказ'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.red,
+          side: const BorderSide(color: Colors.red, width: 1),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md)),
         ),
       ),
     );
@@ -60,14 +172,14 @@ class OrderDetailScreen extends StatelessWidget {
                   letterSpacing: 1.5,
                   color: AppColors.textTertiary)),
           const SizedBox(height: S.x12),
-          _infoRow('Номер', order.orderNumber),
-          _infoRow('Дата', fmt.format(order.createdAt)),
-          _infoRow('Сумма', '${Product.formatPrice(order.total)} сом'),
-          if (order.discount != null && order.discount! > 0)
+          _infoRow('Номер', _order.orderNumber),
+          _infoRow('Дата', fmt.format(_order.createdAt)),
+          _infoRow('Сумма', '${Product.formatPrice(_order.total)} сом'),
+          if (_order.discount != null && _order.discount! > 0)
             _infoRow('Скидка баллами',
-                '-${Product.formatPrice(order.discount!)} сом'),
-          if (order.paymentMethod != null)
-            _infoRow('Оплата', _paymentLabel(order.paymentMethod!)),
+                '-${Product.formatPrice(_order.discount!)} сом'),
+          if (_order.paymentMethod != null)
+            _infoRow('Оплата', _paymentLabel(_order.paymentMethod!)),
         ],
       ),
     );
@@ -101,9 +213,53 @@ class OrderDetailScreen extends StatelessWidget {
       ('delivered', 'Доставлен'),
     ];
 
+    // If cancelled, show a single-item timeline
+    if (_order.status == 'cancelled') {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(S.x16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(R.md),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('СТАТУС',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.5,
+                    color: AppColors.textTertiary)),
+            const SizedBox(height: S.x16),
+            Row(
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close_rounded,
+                      size: 12, color: Colors.red),
+                ),
+                const SizedBox(width: S.x12),
+                Text('Отменён',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red)),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     // Find the current status index
     final currentIdx =
-        allStatuses.indexWhere((s) => s.$1 == order.status);
+        allStatuses.indexWhere((s) => s.$1 == _order.status);
     final activeIdx = currentIdx >= 0 ? currentIdx : 0;
 
     return Container(
@@ -129,7 +285,7 @@ class OrderDetailScreen extends StatelessWidget {
             final isLast = i == allStatuses.length - 1;
 
             // Try to find a timeline entry for this status
-            final timelineEntry = order.timeline
+            final timelineEntry = _order.timeline
                 .where((t) => t.status == allStatuses[i].$1)
                 .toList();
             final timestamp = timelineEntry.isNotEmpty
@@ -249,7 +405,7 @@ class OrderDetailScreen extends StatelessWidget {
                   letterSpacing: 1.5,
                   color: AppColors.textTertiary)),
           const SizedBox(height: S.x12),
-          ...order.items.map((item) => Padding(
+          ..._order.items.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: S.x12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,7 +472,7 @@ class OrderDetailScreen extends StatelessWidget {
   }
 
   Widget _deliveryInfo() {
-    final isPickup = order.deliveryType == 'pickup';
+    final isPickup = _order.deliveryType == 'pickup';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(S.x16),
@@ -353,15 +509,15 @@ class OrderDetailScreen extends StatelessWidget {
               ),
             ],
           ),
-          if (order.pickupLocationName != null) ...[
+          if (_order.pickupLocationName != null) ...[
             const SizedBox(height: S.x4),
-            Text(order.pickupLocationName!,
+            Text(_order.pickupLocationName!,
                 style:
                     TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ],
-          if (order.deliveryAddress != null) ...[
+          if (_order.deliveryAddress != null) ...[
             const SizedBox(height: S.x4),
-            Text(order.deliveryAddress!,
+            Text(_order.deliveryAddress!,
                 style:
                     TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           ],
@@ -384,7 +540,7 @@ class OrderDetailScreen extends StatelessWidget {
           const SizedBox(width: S.x8),
           Expanded(
             child: Text(
-              'Начислено ${order.pointsEarned} баллов за покупку',
+              'Начислено ${_order.pointsEarned} баллов за покупку',
               style: TextStyle(
                   fontSize: 13,
                   color: AppColors.gold,

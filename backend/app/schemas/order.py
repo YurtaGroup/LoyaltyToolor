@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -39,7 +40,6 @@ class OrderOut(BaseModel):
     shipped_at: datetime | None = None
     delivered_at: datetime | None = None
     pickup_location_id: uuid.UUID | None = None
-    pickup_ready_at: datetime | None = None
     ready_for_pickup_at: datetime | None = None
     created_at: datetime
     items: list[OrderItemOut] = []
@@ -50,7 +50,7 @@ class OrderOut(BaseModel):
 class OrderCreate(BaseModel):
     payment_method: str
     delivery_address: str | None = None
-    delivery_type: str = "pickup"
+    delivery_type: Literal["pickup", "delivery"] = "pickup"
     delivery_notes: str | None = None
     try_at_home: bool = False
     points_used: int = 0
@@ -59,7 +59,16 @@ class OrderCreate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    status: str
+    status: Literal[
+        "pending",
+        "payment_uploaded",
+        "payment_confirmed",
+        "processing",
+        "ready_for_pickup",
+        "shipped",
+        "delivered",
+        "cancelled",
+    ]
     admin_notes: str | None = None
 
 

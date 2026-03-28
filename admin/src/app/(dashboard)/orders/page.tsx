@@ -28,8 +28,9 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Button } from "@/components/ui/button";
-import { Eye } from "lucide-react";
+import { Eye, Download } from "lucide-react";
 import { format } from "date-fns";
+import api from "@/lib/api-client";
 
 function formatKGS(amount: number) {
   return new Intl.NumberFormat("ru-RU").format(amount) + " KGS";
@@ -68,9 +69,39 @@ export default function OrdersPage() {
     setPage(1);
   };
 
+  const handleExport = async () => {
+    const { data } = await api.get("/api/v1/admin/orders", {
+      params: {
+        status: status === TAB_ALL ? undefined : status,
+        per_page: 1000,
+      },
+    });
+    const csv = ["Номер,Статус,Сумма,Телефон,Дата"]
+      .concat(
+        data.items.map(
+          (o: { order_number: string; status: string; total: number; user?: { phone?: string }; created_at: string }) =>
+            `${o.order_number},${o.status},${o.total},${o.user?.phone || ""},${o.created_at}`
+        )
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "orders.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Заказы</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Заказы</h1>
+        <Button variant="outline" size="sm" onClick={handleExport}>
+          <Download className="mr-2 size-4" />
+          Экспорт CSV
+        </Button>
+      </div>
 
       <Tabs value={status} onValueChange={handleTabChange}>
         <TabsList className="flex-wrap h-auto">

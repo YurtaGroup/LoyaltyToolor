@@ -30,9 +30,6 @@ class Product {
   factory Product.fromMap(Map<String, dynamic> map) {
     try {
       final id = (map['id'] ?? '').toString();
-      // Show scarcity on ~25% of products, deterministic by ID hash
-      final hash = id.hashCode.abs();
-      final int? stock = (hash % 4 == 0) ? (hash % 5) + 1 : null; // 1-5 items
 
       return Product(
         id: id,
@@ -47,7 +44,7 @@ class Product {
         description: map['description'] as String? ?? '',
         sizes: (map['sizes'] as List?)?.cast<String>() ?? ['M'],
         colors: (map['colors'] as List?)?.cast<String>() ?? [],
-        stock: stock,
+        stock: null,
       );
     } catch (e) {
       throw FormatException('Product.fromMap failed for id=${map['id']}: $e');

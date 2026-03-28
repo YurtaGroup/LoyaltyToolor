@@ -104,7 +104,6 @@ async def update_order_status(
         order.confirmed_at = now
     elif body.status == "ready_for_pickup":
         order.ready_for_pickup_at = now
-        order.pickup_ready_at = now
     elif body.status == "shipped":
         order.shipped_at = now
     elif body.status == "delivered":

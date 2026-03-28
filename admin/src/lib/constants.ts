@@ -24,4 +24,5 @@ export const NAV_ITEMS = [
   { href: "/categories", label: "Категории", icon: "FolderTree" },
   { href: "/promo-codes", label: "Промокоды", icon: "Ticket" },
   { href: "/locations", label: "Точки", icon: "MapPin" },
+  { href: "/notifications", label: "Уведомления", icon: "Bell" },
 ] as const;

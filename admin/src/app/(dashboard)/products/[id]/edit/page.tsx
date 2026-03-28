@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useProducts, useUpdateProduct } from "@/hooks/use-products";
+import { useProduct, useUpdateProduct } from "@/hooks/use-products";
 import { useCategories } from "@/hooks/use-categories";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/select";
 import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import type { Product } from "@/types/product";
 
 interface ProductFormValues {
   name: string;
@@ -74,8 +73,7 @@ export default function EditProductPage() {
   const router = useRouter();
   const id = params.id;
 
-  const { data: productsData, isLoading } = useProducts();
-  const product = productsData?.items.find((p: Product) => p.id === id);
+  const { data: product, isLoading } = useProduct(id);
 
   const updateProduct = useUpdateProduct();
   const { data: categories } = useCategories();

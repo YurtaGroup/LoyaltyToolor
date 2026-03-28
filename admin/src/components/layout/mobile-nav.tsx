@@ -11,6 +11,7 @@ import {
   FolderTree,
   Ticket,
   MapPin,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const iconMap: Record<string, LucideIcon> = {
   FolderTree,
   Ticket,
   MapPin,
+  Bell,
 };
 
 interface MobileNavProps {

@@ -26,6 +26,17 @@ export function useProducts(params: ProductsParams = {}) {
   });
 }
 
+export function useProduct(id: string) {
+  return useQuery({
+    queryKey: ["products", id],
+    queryFn: async () => {
+      const { data } = await api.get<Product>(`/api/v1/products/${id}`);
+      return data;
+    },
+    enabled: !!id,
+  });
+}
+
 export function useCreateProduct() {
   const queryClient = useQueryClient();
 

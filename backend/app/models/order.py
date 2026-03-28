@@ -41,7 +41,6 @@ class Order(Base):
     pickup_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True
     )
-    pickup_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ready_for_pickup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

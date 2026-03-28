@@ -11,7 +11,7 @@ from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
 from app.models.user import Profile
 from app.schemas.loyalty import AdminLoyaltyAdjust, LoyaltyAccountOut
 from app.schemas.user import AdminUserUpdate, UserOut
-from app.services.loyalty_service import calculate_tier
+from app.services.loyalty_service import calculate_tier, check_milestones
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -82,6 +82,10 @@ async def adjust_loyalty(
     body: AdminLoyaltyAdjust,
     db: AsyncSession = Depends(get_db),
 ):
+    user = await db.get(Profile, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     loyalty_result = await db.execute(
         select(LoyaltyAccount).where(LoyaltyAccount.user_id == user_id)
     )
@@ -92,7 +96,6 @@ async def adjust_loyalty(
     loyalty.points += body.points_change
     if loyalty.points < 0:
         loyalty.points = 0
-    loyalty.tier = calculate_tier(loyalty.total_spent)
 
     txn = LoyaltyTransaction(
         loyalty_id=loyalty.id,
@@ -103,6 +106,10 @@ async def adjust_loyalty(
         description=body.description,
     )
     db.add(txn)
+
+    # Check if tier should be upgraded based on total_spent
+    await check_milestones(db, user_id, loyalty)
+
     await db.commit()
     await db.refresh(loyalty)
     return LoyaltyAccountOut.model_validate(loyalty)

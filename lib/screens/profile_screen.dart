@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../widgets/locations_sheet.dart';
 import '../services/api_service.dart';
 import '../models/product.dart';
+import 'edit_profile_screen.dart';
 import 'notifications_screen.dart';
 import 'orders_screen.dart';
 import 'referral_screen.dart';
@@ -633,6 +634,10 @@ class ProfileScreen extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          _menuRow(Icons.edit_outlined, 'Редактировать профиль', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+          }),
+          _div(),
           _menuRow(Icons.favorite_outline_rounded, 'Избранное', () => _showFav(context)),
           _div(),
           _menuRow(Icons.receipt_long_outlined, 'Мои заказы', () {

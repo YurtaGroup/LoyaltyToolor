@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.dependencies import get_current_user, get_db, require_admin
 from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
+from app.models.notification import Notification
 from app.models.user import Profile
 from app.schemas.loyalty import (
     LoyaltyAccountOut,
@@ -124,6 +125,17 @@ async def scan_qr_token(
         return QrScanResponse(valid=False, reason="user_not_found")
 
     cashback = TIER_CASHBACK.get(loyalty.tier, 3)
+
+    # Log scan for the admin who performed it
+    scan_log = Notification(
+        user_id=admin.id,
+        type="scan_log",
+        title="Сканирование QR",
+        body=f"Клиент: {user.full_name} ({user.phone}), уровень: {loyalty.tier}, баллы: {loyalty.points}",
+        data={"scanned_user_id": str(user.id)},
+    )
+    db.add(scan_log)
+    await db.commit()
 
     return QrScanResponse(
         valid=True,

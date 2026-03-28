@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import get_current_user, get_db
+from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
+from app.models.notification import Notification
 from app.models.order import Order
 from app.models.user import Profile
 from app.schemas.order import OrderCreate, OrderOut, OrderTrackOut, TimelineEntry
@@ -159,6 +161,62 @@ async def upload_payment_proof(
     url = await save_upload(file, "payment-proofs")
     order.payment_proof_url = url
     order.status = "payment_uploaded"
+    await db.commit()
+    await db.refresh(order)
+    return OrderOut.model_validate(order)
+
+
+@router.post("/{order_id}/cancel", response_model=OrderOut)
+async def cancel_order(
+    order_id: uuid.UUID,
+    user: Profile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == order_id, Order.user_id == user.id)
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status not in ("pending", "payment_uploaded"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Нельзя отменить заказ в статусе '{order.status}'",
+        )
+
+    # Restore loyalty points if any were redeemed
+    if order.points_used > 0:
+        loyalty_result = await db.execute(
+            select(LoyaltyAccount).where(LoyaltyAccount.user_id == user.id)
+        )
+        loyalty = loyalty_result.scalar_one_or_none()
+        if loyalty:
+            loyalty.points += order.points_used
+            txn = LoyaltyTransaction(
+                loyalty_id=loyalty.id,
+                user_id=user.id,
+                order_id=order.id,
+                type="points_refund",
+                amount=0,
+                points_change=order.points_used,
+                description=f"Возврат {order.points_used} баллов за отмену заказа #{order.order_number}",
+            )
+            db.add(txn)
+
+    order.status = "cancelled"
+
+    notification = Notification(
+        user_id=user.id,
+        type="order_status",
+        title=f"Заказ #{order.order_number} отменён",
+        body=f"Заказ #{order.order_number} отменён",
+        data={"order_id": str(order.id), "status": "cancelled"},
+    )
+    db.add(notification)
+
     await db.commit()
     await db.refresh(order)
     return OrderOut.model_validate(order)

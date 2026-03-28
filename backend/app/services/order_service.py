@@ -42,6 +42,13 @@ async def create_order_from_cart(
     if not cart_items:
         raise ValueError("Cart is empty")
 
+    # Check stock availability before proceeding
+    for ci in cart_items:
+        if ci.product.stock is not None and ci.product.stock < ci.quantity:
+            raise ValueError(
+                f"Товар '{ci.product.name}' нет в наличии (осталось {ci.product.stock})"
+            )
+
     # Calculate subtotal
     subtotal = Decimal(0)
     order_items = []
@@ -121,6 +128,11 @@ async def create_order_from_cart(
     for item in order_items:
         item.order_id = order.id
         db.add(item)
+
+    # Decrement stock for each item
+    for ci in cart_items:
+        if ci.product.stock is not None:
+            ci.product.stock -= ci.quantity
 
     # Award loyalty points
     if loyalty:
