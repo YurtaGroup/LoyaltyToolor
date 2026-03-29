@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -30,15 +31,32 @@ from app.routers.admin import (
 )
 
 IS_VERCEL = bool(os.environ.get("VERCEL"))
+RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
+
+
+async def _keep_alive():
+    """Ping self every 13 minutes to prevent Render free tier spin-down."""
+    if not RENDER_URL:
+        return
+    await asyncio.sleep(60)  # wait for startup
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                await client.get(f"{RENDER_URL}/api/v1/health", timeout=10)
+            except Exception:
+                pass
+            await asyncio.sleep(780)  # 13 minutes
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not IS_VERCEL:
-        # Ensure upload dirs exist (not available on serverless)
         for sub in ("payment-proofs", "product-images", "avatars"):
             Path(settings.UPLOAD_DIR, sub).mkdir(parents=True, exist_ok=True)
+    # Keep-alive task for Render free tier
+    task = asyncio.create_task(_keep_alive())
     yield
+    task.cancel()
 
 
 import logging
