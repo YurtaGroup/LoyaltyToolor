@@ -31,6 +31,8 @@ class OrderOut(BaseModel):
     currency: str
     payment_method: str | None = None
     payment_proof_url: str | None = None
+    payment_transaction_id: str | None = None
+    payment_provider: str | None = None
     delivery_address: str | None = None
     delivery_type: str
     delivery_notes: str | None = None

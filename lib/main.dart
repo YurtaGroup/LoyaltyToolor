@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'theme/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
@@ -15,11 +16,28 @@ import 'screens/chat_screen.dart';
 import 'screens/scanner_screen.dart';
 import 'services/api_service.dart';
 
+const _sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ApiService.init();
-  runApp(const ToolorApp());
+
+  // Warm up serverless backend (prevents cold start 502 on first real request)
+  ApiService.dio.get('/api/v1/health').ignore();
+
+  if (_sentryDsn.isNotEmpty) {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = _sentryDsn;
+        options.tracesSampleRate = 0.3;
+        options.environment = 'production';
+      },
+      appRunner: () => runApp(const ToolorApp()),
+    );
+  } else {
+    runApp(const ToolorApp());
+  }
 }
 
 class ToolorApp extends StatelessWidget {

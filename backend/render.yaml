@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: toolor-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql+asyncpg://neondb_owner:npg_3NKgvsFrW5io@ep-blue-boat-amiwae15-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require
+      - key: JWT_SECRET
+        value: toolor-jwt-secret-2024-prod
+      - key: QR_SECRET
+        value: toolor-qr-secret-2024
+      - key: CORS_ORIGINS
+        value: '["https://toolor-admin.vercel.app","http://localhost:3000","https://*.onrender.com"]'
+      - key: ADMIN_PHONE
+        value: "+996999955000"
+      - key: UPLOAD_DIR
+        value: /app/uploads

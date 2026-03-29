@@ -1,14 +1,23 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
+import sentry_sdk
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import auth, users, loyalty, products, orders, cart, favorites, chat, locations, promo_codes, notifications, referrals
+from app.routers import auth, users, loyalty, products, orders, cart, favorites, chat, locations, promo_codes, notifications, referrals, webhooks
+
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=0.3,
+        environment="production",
+    )
 from app.routers.admin import (
     products as admin_products,
     orders as admin_orders,
@@ -20,16 +29,39 @@ from app.routers.admin import (
     notifications as admin_notifications,
 )
 
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure upload dirs exist
-    for sub in ("payment-proofs", "product-images", "avatars"):
-        Path(settings.UPLOAD_DIR, sub).mkdir(parents=True, exist_ok=True)
+    if not IS_VERCEL:
+        # Ensure upload dirs exist (not available on serverless)
+        for sub in ("payment-proofs", "product-images", "avatars"):
+            Path(settings.UPLOAD_DIR, sub).mkdir(parents=True, exist_ok=True)
     yield
 
 
+import logging
+import traceback
+
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
+
 app = FastAPI(title="TOOLOR API", version="1.0.0", lifespan=lifespan)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("toolor")
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    logger.error(f"Unhandled error on {request.method} {request.url.path}: {exc}\n{tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "path": request.url.path},
+    )
+
 
 # CORS
 app.add_middleware(
@@ -40,8 +72,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static files for uploads
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+# Static files for uploads (not available on Vercel serverless)
+if not IS_VERCEL:
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Public + authenticated routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
@@ -56,6 +89,7 @@ app.include_router(locations.router, prefix="/api/v1/locations", tags=["location
 app.include_router(promo_codes.router, prefix="/api/v1/promo-codes", tags=["promo-codes"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(referrals.router, prefix="/api/v1/referrals", tags=["referrals"])
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
 
 # Admin routers
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin"])

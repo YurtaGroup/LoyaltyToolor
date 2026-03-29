@@ -19,13 +19,20 @@ class LoyaltyAccount {
 
   /// Create a LoyaltyAccount from the FastAPI backend JSON response.
   /// Transactions are fetched separately, so they default to empty.
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
+  }
+
   factory LoyaltyAccount.fromJson(Map<String, dynamic> json) {
     return LoyaltyAccount(
       id: json['id'] as String? ?? '',
       qrCode: json['qr_code'] as String? ?? '',
       tier: _parseTier(json['tier'] as String? ?? 'bronze'),
       points: (json['points'] as num?)?.toInt() ?? 0,
-      totalSpent: (json['total_spent'] as num?)?.toDouble() ?? 0,
+      totalSpent: _toDouble(json['total_spent']),
     );
   }
 
@@ -122,8 +129,10 @@ class LoyaltyTransaction {
       id: json['id'] as String? ?? '',
       date: DateTime.tryParse(json['created_at'] as String? ?? '') ??
           DateTime.now(),
-      amount: (json['amount'] as num?)?.toDouble() ?? 0,
-      pointsEarned: (json['points_change'] as num?)?.toInt() ?? 0,
+      amount: LoyaltyAccount._toDouble(json['amount']),
+      pointsEarned: (json['points_change'] is String
+          ? int.tryParse(json['points_change']) ?? 0
+          : (json['points_change'] as num?)?.toInt() ?? 0),
       description: json['description'] as String? ?? '',
       type: _parseTransactionType(json['type'] as String? ?? 'purchase'),
     );

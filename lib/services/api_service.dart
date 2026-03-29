@@ -1,15 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-
-/// Base URL configured via --dart-define, or auto-detected per platform.
+/// Base URL configured via --dart-define, or Vercel production by default.
 const _envUrl = String.fromEnvironment('API_URL', defaultValue: '');
 final String apiBaseUrl = _envUrl.isNotEmpty
     ? _envUrl
-    : kIsWeb
-        ? 'http://localhost:8000'
-        : 'http://10.0.2.2:8000';
+    : 'https://backend-jet-one-87.vercel.app';
 
 /// Dio-based HTTP client singleton.
 /// Call [init] once in main() before runApp().
@@ -32,8 +28,8 @@ class ApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: apiBaseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -66,6 +62,21 @@ class ApiService {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    // Retry once on 502 (Vercel cold start timeout)
+    if (err.response?.statusCode == 502) {
+      final opts = err.requestOptions;
+      if (opts.extra['_retried'] != true) {
+        opts.extra['_retried'] = true;
+        try {
+          // Wait for function to warm up, then retry
+          await Future.delayed(const Duration(seconds: 2));
+          final response = await _dio.fetch(opts);
+          return handler.resolve(response);
+        } on DioException catch (e) {
+          return handler.next(e);
+        }
+      }
+    }
     if (err.response?.statusCode == 401) {
       final refreshed = await _tryRefreshToken();
       if (refreshed) {

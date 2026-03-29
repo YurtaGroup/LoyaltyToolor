@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     ADMIN_PHONE: str = "+996999955000"
     ADMIN_PASSWORD: str = "admin123"
     QR_SECRET: str = "change-me-qr-secret"
+    SENTRY_DSN: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:

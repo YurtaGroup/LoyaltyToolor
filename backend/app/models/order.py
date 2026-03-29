@@ -26,6 +26,8 @@ class Order(Base):
     currency: Mapped[str] = mapped_column(String, default="KGS")
     payment_method: Mapped[str | None] = mapped_column(String, nullable=True)
     payment_proof_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    payment_transaction_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    payment_provider: Mapped[str | None] = mapped_column(String, nullable=True)
     delivery_address: Mapped[str | None] = mapped_column(String, nullable=True)
     delivery_type: Mapped[str] = mapped_column(String, default="pickup")
     delivery_notes: Mapped[str | None] = mapped_column(String, nullable=True)

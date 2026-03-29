@@ -62,6 +62,8 @@ class _AuthScreenState extends State<AuthScreen> {
     if (auth.error != null) {
       _showError(auth.error!);
       auth.clearError();
+    } else if (auth.isLoggedIn) {
+      Navigator.of(context).pop();
     }
   }
 

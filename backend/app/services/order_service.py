@@ -143,5 +143,5 @@ async def create_order_from_cart(
         await db.delete(ci)
 
     await db.flush()
-    order.items = order_items
+    await db.refresh(order, ["items"])
     return order

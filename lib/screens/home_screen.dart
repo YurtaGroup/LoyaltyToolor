@@ -153,7 +153,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   // ─── Main Home ───────────────────────────────────────────────────
   Widget _home(BuildContext context, AuthProvider auth) {
     final loyalty = auth.loyalty;
-    if (loyalty == null) return const SizedBox.shrink();
+    if (loyalty == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());

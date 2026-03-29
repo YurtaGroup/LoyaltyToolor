@@ -32,18 +32,35 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await ApiService.login(phone, password);
-      await fetchProfile();
-      await fetchLoyalty();
-      _isLoggedIn = true;
-      startQrRefresh();
     } catch (e) {
-      _error = _extractErrorMessage(e);
+      _error = 'Ошибка входа: $e';
       _isLoggedIn = false;
-      debugPrint('[AuthProvider] login error: $e');
-    } finally {
       _isLoading = false;
       notifyListeners();
+      return;
     }
+
+    try {
+      await fetchProfile();
+    } catch (e) {
+      _error = 'Ошибка профиля: $e';
+      _isLoggedIn = false;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      await fetchLoyalty();
+    } catch (e) {
+      // Non-fatal — continue login even if loyalty fails
+      debugPrint('[AuthProvider] fetchLoyalty error: $e');
+    }
+
+    _isLoggedIn = true;
+    startQrRefresh();
+    _isLoading = false;
+    notifyListeners();
   }
 
   /// Register a new account, then auto-login.
@@ -71,19 +88,34 @@ class AuthProvider extends ChangeNotifier {
       if (access != null && refresh != null) {
         await ApiService.setTokens(access, refresh);
       }
-
-      await fetchProfile();
-      await fetchLoyalty();
-      _isLoggedIn = true;
-      startQrRefresh();
     } catch (e) {
-      _error = _extractErrorMessage(e);
+      _error = 'Ошибка регистрации: $e';
       _isLoggedIn = false;
-      debugPrint('[AuthProvider] register error: $e');
-    } finally {
       _isLoading = false;
       notifyListeners();
+      return;
     }
+
+    try {
+      await fetchProfile();
+    } catch (e) {
+      _error = 'Ошибка профиля: $e';
+      _isLoggedIn = false;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      await fetchLoyalty();
+    } catch (e) {
+      debugPrint('[AuthProvider] fetchLoyalty error: $e');
+    }
+
+    _isLoggedIn = true;
+    startQrRefresh();
+    _isLoading = false;
+    notifyListeners();
   }
 
   /// Fetch user profile from GET /api/v1/users/me.

@@ -142,6 +142,53 @@ async def get_order(
     return OrderOut.model_validate(order)
 
 
+@router.post("/{order_id}/confirm-payment", response_model=OrderOut)
+async def confirm_finik_payment(
+    order_id: uuid.UUID,
+    body: dict,
+    user: Profile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Called by Flutter app after Finik SDK reports payment success."""
+    from datetime import datetime, timezone
+
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == order_id, Order.user_id == user.id)
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.status in ("payment_confirmed", "processing", "shipped", "delivered"):
+        return OrderOut.model_validate(order)
+
+    transaction_id = body.get("transactionId")
+    status = body.get("status")
+
+    if status != "SUCCEEDED":
+        raise HTTPException(status_code=400, detail="Payment not successful")
+
+    order.status = "payment_confirmed"
+    order.payment_transaction_id = transaction_id
+    order.payment_provider = "finik"
+    order.confirmed_at = datetime.now(timezone.utc)
+
+    notification = Notification(
+        user_id=user.id,
+        type="order_status",
+        title=f"Заказ #{order.order_number}",
+        body="Оплата подтверждена",
+        data={"order_id": str(order.id), "status": "payment_confirmed"},
+    )
+    db.add(notification)
+
+    await db.commit()
+    await db.refresh(order)
+    return OrderOut.model_validate(order)
+
+
 @router.post("/{order_id}/payment-proof", response_model=OrderOut)
 async def upload_payment_proof(
     order_id: uuid.UUID,
