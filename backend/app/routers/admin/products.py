@@ -49,6 +49,19 @@ async def list_all_products(
     }
 
 
+@router.get("/{product_id}", response_model=ProductOut)
+async def get_product(product_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.category), selectinload(Product.subcategory))
+        .where(Product.id == product_id)
+    )
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return _product_to_out(product)
+
+
 @router.post("", response_model=ProductOut, status_code=201)
 async def create_product(body: ProductCreate, db: AsyncSession = Depends(get_db)):
     product = Product(**body.model_dump())
