@@ -166,6 +166,30 @@ class ApiService {
     return data;
   }
 
+  /// POST /api/v1/auth/apple — Sign in with Apple identity token.
+  static Future<Map<String, dynamic>> appleAuth(
+    String identityToken, {
+    String? fullName,
+  }) async {
+    final response = await _dio.post(
+      '/api/v1/auth/apple',
+      data: {
+        'identity_token': identityToken,
+        if (fullName != null) 'full_name': fullName,
+      },
+    );
+
+    final data = response.data as Map<String, dynamic>;
+    final access = data['access_token'] as String?;
+    final refresh = data['refresh_token'] as String?;
+
+    if (access != null && refresh != null) {
+      await setTokens(access, refresh);
+    }
+
+    return data;
+  }
+
   /// Clear stored tokens (local logout).
   static Future<void> logout() async {
     await clearTokens();

@@ -65,4 +65,42 @@ class Analytics {
   static void loyaltyQrScanned() {
     track('qr_scanned');
   }
+
+  // ── Apple auth ──────────────────────────────────────────────────────
+  static void appleSignIn() {
+    track('apple_sign_in_attempt');
+  }
+
+  static void appleSignInSuccess() {
+    track('apple_sign_in_success');
+  }
+
+  // ── Session & engagement ────────────────────────────────────────────
+  static void appOpen() {
+    track('app_open');
+  }
+
+  static void sessionStart() {
+    track('session_start', {'timestamp': DateTime.now().toIso8601String()});
+  }
+
+  static void removeFromCart(String productId, String name, double price) {
+    track('remove_from_cart', {'product_id': productId, 'product_name': name, 'price': price});
+  }
+
+  static void search(String query, int resultsCount) {
+    track('search', {'query': query, 'results_count': resultsCount});
+  }
+
+  static void shareProduct(String productId, String name) {
+    track('share_product', {'product_id': productId, 'product_name': name});
+  }
+
+  static void referralShared() {
+    track('referral_shared');
+  }
+
+  static void notificationOpened(String type) {
+    track('notification_opened', {'type': type});
+  }
 }

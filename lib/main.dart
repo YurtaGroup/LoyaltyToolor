@@ -30,6 +30,9 @@ void main() async {
   // Warm up serverless backend (prevents cold start 502 on first real request)
   ApiService.dio.get('/api/v1/health').ignore();
 
+  // Track app open
+  Analytics.appOpen();
+
   if (_sentryDsn.isNotEmpty) {
     await SentryFlutter.init(
       (options) {

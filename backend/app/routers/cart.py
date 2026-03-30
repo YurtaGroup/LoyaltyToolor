@@ -9,6 +9,7 @@ from app.dependencies import get_current_user, get_db
 from app.models.cart import CartItem
 from app.models.user import Profile
 from app.schemas.cart import CartItemCreate, CartItemOut, CartItemUpdate
+from app.services.event_logger import log_event
 
 router = APIRouter()
 
@@ -71,6 +72,7 @@ async def add_to_cart(
         quantity=body.quantity,
     )
     db.add(item)
+    await log_event(db, user.id, "add_to_cart", {"product_id": str(body.product_id)})
     await db.commit()
 
     result = await db.execute(

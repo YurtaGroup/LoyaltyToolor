@@ -15,6 +15,7 @@ from app.schemas.order import OrderCreate, OrderOut, OrderTrackOut, TimelineEntr
 from app.services.order_service import create_order_from_cart
 from app.services.upload_service import save_upload
 from app.services.analytics_service import track_purchase
+from app.services.event_logger import log_event
 
 router = APIRouter()
 
@@ -47,6 +48,12 @@ async def create_order(
             payment_method=body.payment_method or "unknown",
             points_used=body.points_used or 0,
         )
+        await log_event(db, user.id, "purchase", {
+            "order_id": str(order.id),
+            "total": float(order.total),
+            "items_count": len(order.items),
+        })
+        await db.commit()
         return OrderOut.model_validate(order)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

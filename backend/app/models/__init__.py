@@ -9,3 +9,4 @@ from app.models.notification import Notification  # noqa
 from app.models.referral import Referral  # noqa
 from app.models.promo_code import PromoCode  # noqa
 from app.models.location import Location  # noqa
+from app.models.app_event import AppEvent  # noqa

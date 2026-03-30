@@ -29,6 +29,7 @@ from app.routers.admin import (
     dashboard as admin_dashboard,
     notifications as admin_notifications,
     inventory as admin_inventory,
+    analytics as admin_analytics,
 )
 
 IS_VERCEL = bool(os.environ.get("VERCEL"))
@@ -53,7 +54,7 @@ async def _auto_migrate():
     """Create all tables on first start if they don't exist."""
     from app.database import engine, Base
     # Import all models so Base.metadata knows about them
-    from app.models import user, loyalty, product, order, cart, chat, notification, promo_code, location, referral  # noqa: F401
+    from app.models import user, loyalty, product, order, cart, chat, notification, promo_code, location, referral, app_event  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -81,6 +82,10 @@ app = FastAPI(title="TOOLOR API", version="1.0.0", lifespan=lifespan)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("toolor")
+
+# Structured request logging
+from app.middleware.request_logging import RequestLoggingMiddleware
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -131,6 +136,7 @@ app.include_router(admin_promo_codes.router, prefix="/api/v1/admin/promo-codes",
 app.include_router(admin_locations.router, prefix="/api/v1/admin/locations", tags=["admin-locations"])
 app.include_router(admin_notifications.router, prefix="/api/v1/admin/notifications", tags=["admin-notifications"])
 app.include_router(admin_inventory.router, prefix="/api/v1/admin/inventory", tags=["admin-inventory"])
+app.include_router(admin_analytics.router, prefix="/api/v1/admin", tags=["admin-analytics"])
 
 
 @app.get("/api/v1/health")
