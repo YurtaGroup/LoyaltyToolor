@@ -196,29 +196,25 @@ class CartProvider extends ChangeNotifier {
   }
 
   /// Push entire local cart to backend (full sync).
+  /// Throws on failure so callers (e.g. checkout) can handle it.
   Future<void> syncToBackend() async {
+    final loggedIn = await ApiService.isLoggedIn();
+    if (!loggedIn) return;
+
+    // Clear backend cart first, then push all local items
     try {
-      final loggedIn = await ApiService.isLoggedIn();
-      if (!loggedIn) return;
+      await ApiService.dio.delete('/api/v1/cart');
+    } catch (_) {
+      // May 404 if already empty — that's fine
+    }
 
-      // Clear backend cart first, then push all local items
-      try {
-        await ApiService.dio.delete('/api/v1/cart');
-      } catch (_) {
-        // May 404 if already empty — that's fine
-      }
-
-      for (final item in _items) {
-        await ApiService.dio.post('/api/v1/cart', data: {
-          'product_id': item.product.id,
-          'selected_size': item.selectedSize,
-          'selected_color': item.selectedColor,
-          'quantity': item.quantity,
-        });
-      }
-    } catch (e) {
-      debugPrint('[CartProvider] syncToBackend error: $e');
-      // Non-fatal — local state is primary
+    for (final item in _items) {
+      await ApiService.dio.post('/api/v1/cart', data: {
+        'product_id': item.product.id,
+        'selected_size': item.selectedSize,
+        'selected_color': item.selectedColor,
+        'quantity': item.quantity,
+      });
     }
   }
 

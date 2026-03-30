@@ -539,6 +539,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
+      // Sync local cart to backend before creating order
+      await context.read<CartProvider>().syncToBackend();
+
       // Create order on backend first
       final orderData = <String, dynamic>{
         'payment_method': 'finik',
@@ -1042,6 +1045,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
 
     try {
+      // Sync local cart to backend before creating order
+      await context.read<CartProvider>().syncToBackend();
+
       final orderData = <String, dynamic>{
         'payment_method': 'mbank_qr',
         'delivery_type': _deliveryType,
