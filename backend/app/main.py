@@ -149,8 +149,9 @@ async def migrate_from_neon():
     # Order matters: parent tables first to satisfy foreign keys
     table_names = [
         "profiles", "categories", "subcategories", "products", "locations",
-        "loyalty_accounts", "loyalty_transactions", "promo_codes",
-        "orders", "order_items", "cart_items", "favorites",
+        "loyalty_accounts", "promo_codes",
+        "orders", "order_items", "loyalty_transactions",
+        "cart_items", "favorites",
         "chat_sessions", "chat_messages", "notifications", "referrals",
     ]
 
