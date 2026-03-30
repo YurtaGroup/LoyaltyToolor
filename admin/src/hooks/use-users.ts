@@ -63,6 +63,33 @@ export function useUpdateUser() {
   });
 }
 
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/v1/admin/users/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+export function useUserOrders(userId: string, page = 1) {
+  return useQuery({
+    queryKey: ["users", userId, "orders", page],
+    queryFn: async () => {
+      const { data } = await api.get(
+        `/api/v1/admin/users/${userId}/orders`,
+        { params: { page, per_page: 10 } },
+      );
+      return data;
+    },
+    enabled: !!userId,
+  });
+}
+
 export function useAdjustLoyalty() {
   const queryClient = useQueryClient();
 

@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useProducts, useDeleteProduct } from "@/hooks/use-products";
+import { useProducts, useDeleteProduct, useUpdateProduct } from "@/hooks/use-products";
 import { useCategories } from "@/hooks/use-categories";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -30,6 +29,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,6 +49,17 @@ export default function ProductsPage() {
   });
   const { data: categories } = useCategories();
   const deleteMutation = useDeleteProduct();
+  const updateMutation = useUpdateProduct();
+
+  const handleToggle = (id: string, field: "is_active" | "is_featured", value: boolean) => {
+    updateMutation.mutate(
+      { id, [field]: value },
+      {
+        onSuccess: () => toast.success("Обновлено"),
+        onError: () => toast.error("Ошибка обновления"),
+      },
+    );
+  };
 
   const handleDelete = (id: string, name: string) => {
     if (!confirm(`Удалить товар "${name}"?`)) return;
@@ -121,6 +132,7 @@ export default function ProductsPage() {
                 <TableHead>Цена</TableHead>
                 <TableHead>Категория</TableHead>
                 <TableHead>Активен</TableHead>
+                <TableHead>Хит</TableHead>
                 <TableHead className="w-[100px]">Действия</TableHead>
               </TableRow>
             </TableHeader>
@@ -150,11 +162,20 @@ export default function ProductsPage() {
                       ?.name ?? "-"}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={product.is_active ? "default" : "secondary"}
-                    >
-                      {product.is_active ? "Да" : "Нет"}
-                    </Badge>
+                    <Switch
+                      checked={product.is_active}
+                      onCheckedChange={(v) =>
+                        handleToggle(product.id, "is_active", v)
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={product.is_featured}
+                      onCheckedChange={(v) =>
+                        handleToggle(product.id, "is_featured", v)
+                      }
+                    />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -183,7 +204,7 @@ export default function ProductsPage() {
               ))}
               {data?.items.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     Товары не найдены
                   </TableCell>
                 </TableRow>

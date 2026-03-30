@@ -30,7 +30,7 @@ export function useProduct(id: string) {
   return useQuery({
     queryKey: ["products", id],
     queryFn: async () => {
-      const { data } = await api.get<Product>(`/api/v1/products/${id}`);
+      const { data } = await api.get<Product>(`/api/v1/admin/products/${id}`);
       return data;
     },
     enabled: !!id,
