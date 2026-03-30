@@ -22,7 +22,15 @@ if "neon.tech" in settings.DATABASE_URL or "sslmode=require" in settings.DATABAS
         _ssl_ctx = _ssl.create_default_context()
     _connect_args = {"ssl": _ssl_ctx}
 
-engine = create_async_engine(_db_url, echo=False, connect_args=_connect_args)
+engine = create_async_engine(
+    _db_url,
+    echo=False,
+    connect_args=_connect_args,
+    pool_recycle=270,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
