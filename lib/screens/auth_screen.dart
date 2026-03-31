@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -13,56 +13,142 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  bool _isLogin = true;
-  bool _obscurePassword = true;
-
   final _phoneCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  final _nameCtrl = TextEditingController();
-  final _referralCtrl = TextEditingController();
+
+  // OTP page state
+  bool _otpSent = false;
+  String _phone = '';
+  final List<TextEditingController> _otpCtrls =
+      List.generate(4, (_) => TextEditingController());
+  final List<FocusNode> _otpFocusNodes = List.generate(4, (_) => FocusNode());
+
+  // Resend timer
+  Timer? _resendTimer;
+  int _resendSeconds = 0;
 
   @override
   void dispose() {
     _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
-    _nameCtrl.dispose();
-    _referralCtrl.dispose();
+    for (final c in _otpCtrls) {
+      c.dispose();
+    }
+    for (final f in _otpFocusNodes) {
+      f.dispose();
+    }
+    _resendTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final phone = _phoneCtrl.text.trim();
-    final password = _passwordCtrl.text.trim();
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    _resendSeconds = 60;
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _resendSeconds--;
+        if (_resendSeconds <= 0) {
+          timer.cancel();
+        }
+      });
+    });
+  }
 
-    if (phone.isEmpty || password.isEmpty) {
-      _showError('Заполните все поля');
-      return;
-    }
+  String _formatPhone(String raw) {
+    // Normalize phone: ensure it starts with +
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    if (!trimmed.startsWith('+')) return '+$trimmed';
+    return trimmed;
+  }
 
-    if (password.length < 4) {
-      _showError('Пароль минимум 4 символа');
+  Future<void> _sendOtp() async {
+    final phone = _formatPhone(_phoneCtrl.text);
+    if (phone.length < 6) {
+      _showError('Введите номер телефона');
       return;
     }
 
     final auth = context.read<AuthProvider>();
-
-    if (_isLogin) {
-      await auth.login(phone, password);
-    } else {
-      final name = _nameCtrl.text.trim();
-      if (name.isEmpty) {
-        _showError('Введите имя');
-        return;
-      }
-      final referral = _referralCtrl.text.trim();
-      await auth.register(phone, password, name, referralCode: referral.isNotEmpty ? referral : null);
-    }
+    final otpCode = await auth.sendOtp(phone);
 
     if (!mounted) return;
 
     if (auth.error != null) {
       _showError(auth.error!);
       auth.clearError();
+      return;
+    }
+
+    setState(() {
+      _phone = phone;
+      _otpSent = true;
+    });
+
+    _startResendTimer();
+
+    // Auto-fill OTP from backend response (dev mode)
+    if (otpCode != null && otpCode.length == 4) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      for (int i = 0; i < 4; i++) {
+        _otpCtrls[i].text = otpCode[i];
+      }
+      // Auto-submit after fill
+      _verifyOtp();
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    if (_resendSeconds > 0) return;
+
+    // Clear old OTP fields
+    for (final c in _otpCtrls) {
+      c.clear();
+    }
+
+    final auth = context.read<AuthProvider>();
+    final otpCode = await auth.sendOtp(_phone);
+
+    if (!mounted) return;
+
+    if (auth.error != null) {
+      _showError(auth.error!);
+      auth.clearError();
+      return;
+    }
+
+    _startResendTimer();
+
+    // Auto-fill again
+    if (otpCode != null && otpCode.length == 4) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      for (int i = 0; i < 4; i++) {
+        _otpCtrls[i].text = otpCode[i];
+      }
+      _verifyOtp();
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    final code = _otpCtrls.map((c) => c.text).join();
+    if (code.length != 4) {
+      _showError('Введите 4-значный код');
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    await auth.verifyOtp(_phone, code);
+
+    if (!mounted) return;
+
+    if (auth.error != null) {
+      _showError(auth.error!);
+      auth.clearError();
+      // Clear OTP fields on wrong code
+      for (final c in _otpCtrls) {
+        c.clear();
+      }
+      _otpFocusNodes[0].requestFocus();
     } else if (auth.isLoggedIn) {
       Navigator.of(context).pop();
     }
@@ -101,257 +187,280 @@ class _AuthScreenState extends State<AuthScreen> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset('assets/images/toolor_logo.png', width: 180),
-                  const SizedBox(height: 6),
-                  Text(
-                    'LOYALTY  &  STORE',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w400, letterSpacing: 6, color: AppColors.textTertiary),
-                  ),
-                  const SizedBox(height: 40),
+              child: _otpSent ? _buildOtpPage(auth) : _buildPhonePage(auth),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                  // Tab toggle
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        _tab('Вход', _isLogin),
-                        _tab('Регистрация', !_isLogin),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+  // ── Phone input page ──────────────────────────────────────────────────
 
-                  // Phone
-                  _field(
-                    controller: _phoneCtrl,
-                    hint: '+996 ...',
-                    label: 'Телефон',
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  const SizedBox(height: 14),
+  Widget _buildPhonePage(AuthProvider auth) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Image.asset('assets/images/toolor_logo.png', width: 180),
+        const SizedBox(height: 6),
+        Text(
+          'LOYALTY  &  STORE',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 6,
+            color: AppColors.textTertiary,
+          ),
+        ),
+        const SizedBox(height: 48),
 
-                  // Name (register only)
-                  if (!_isLogin) ...[
-                    _field(
-                      controller: _nameCtrl,
-                      hint: 'Ваше имя',
-                      label: 'Имя',
-                      icon: Icons.person_outline,
-                    ),
-                    const SizedBox(height: 14),
-                  ],
+        Text(
+          'Войти по номеру телефона',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Мы отправим SMS с кодом подтверждения',
+          style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
 
-                  // Password
-                  _field(
-                    controller: _passwordCtrl,
-                    hint: '••••••',
-                    label: 'Пароль',
-                    icon: Icons.lock_outline,
-                    obscure: _obscurePassword,
-                    suffix: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        size: 20,
-                        color: AppColors.textTertiary,
-                      ),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                  ),
-
-                  // Referral (register only)
-                  if (!_isLogin) ...[
-                    const SizedBox(height: 14),
-                    _field(
-                      controller: _referralCtrl,
-                      hint: 'Код друга (необязательно)',
-                      label: 'Реферальный код',
-                      icon: Icons.card_giftcard_outlined,
-                    ),
-                  ],
-
-                  const SizedBox(height: 28),
-
-                  // Submit button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: auth.isLoading ? null : () {
-                        HapticFeedback.mediumImpact();
-                        _submit();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0033A0),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1),
-                      ),
-                      child: auth.isLoading
-                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Text(_isLogin ? 'ВОЙТИ' : 'СОЗДАТЬ АККАУНТ'),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ── OAuth divider ──
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: AppColors.divider, thickness: 0.5)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('или', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                      ),
-                      Expanded(child: Divider(color: AppColors.divider, thickness: 0.5)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ── Apple Sign In ──
-                  if (Platform.isIOS)
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        onPressed: auth.isLoading ? null : () {
-                          HapticFeedback.mediumImpact();
-                          auth.signInWithApple().then((_) {
-                            if (!mounted) return;
-                            if (auth.error != null) {
-                              _showError(auth.error!);
-                              auth.clearError();
-                            } else if (auth.isLoggedIn) {
-                              Navigator.of(context).pop();
-                            }
-                          });
-                        },
-                        icon: const Icon(Icons.apple, size: 22, color: Colors.white),
-                        label: const Text('Войти через Apple', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          side: BorderSide.none,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                      ),
-                    ),
-
-                  if (Platform.isIOS) const SizedBox(height: 12),
-
-                  // ── Google Sign In ──
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: auth.isLoading ? null : () {
-                        HapticFeedback.mediumImpact();
-                        auth.signInWithGoogle().then((_) {
-                          if (!mounted) return;
-                          if (auth.error != null) {
-                            _showError(auth.error!);
-                            auth.clearError();
-                          } else if (auth.isLoggedIn) {
-                            Navigator.of(context).pop();
-                          }
-                        });
-                      },
-                      icon: Image.asset('assets/images/google_logo.png', width: 20, height: 20,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 24)),
-                      label: Text('Войти через Google', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: AppColors.surface,
-                        side: BorderSide(color: AppColors.divider),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Skip hint
-                  TextButton(
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.pop(context);
-                    },
-                    child: Text(
-                      'Пропустить',
-                      style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
-                    ),
-                  ),
-                ],
+        // Phone field
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Телефон',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _tab(String label, bool active) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _isLogin = label == 'Вход');
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: active ? AppColors.accent.withValues(alpha: 0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              color: active ? AppColors.accent : AppColors.textTertiary,
-              fontSize: 14,
+            const SizedBox(height: 6),
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: '+996 ...',
+                hintStyle: TextStyle(color: AppColors.textTertiary),
+                prefixIcon: Icon(Icons.phone_outlined, size: 20, color: AppColors.textTertiary),
+                filled: true,
+                fillColor: AppColors.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
             ),
+          ],
+        ),
+        const SizedBox(height: 28),
+
+        // Continue button
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: auth.isLoading
+                ? null
+                : () {
+                    HapticFeedback.mediumImpact();
+                    _sendOtp();
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0033A0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1),
+            ),
+            child: auth.isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('ПРОДОЛЖИТЬ'),
           ),
         ),
-      ),
-    );
-  }
 
-  Widget _field({
-    required TextEditingController controller,
-    required String hint,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    bool obscure = false,
-    Widget? suffix,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          obscureText: obscure,
-          style: TextStyle(color: AppColors.textPrimary),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: AppColors.textTertiary),
-            prefixIcon: Icon(icon, size: 20, color: AppColors.textTertiary),
-            suffixIcon: suffix,
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        const SizedBox(height: 16),
+
+        // Skip
+        TextButton(
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            Navigator.pop(context);
+          },
+          child: Text(
+            'Пропустить',
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
           ),
         ),
       ],
+    );
+  }
+
+  // ── OTP verification page ─────────────────────────────────────────────
+
+  Widget _buildOtpPage(AuthProvider auth) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Image.asset('assets/images/toolor_logo.png', width: 120),
+        const SizedBox(height: 40),
+
+        Text(
+          'Код подтверждения',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Отправлен на $_phone',
+          style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+        ),
+        const SizedBox(height: 36),
+
+        // OTP input fields
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(4, (i) => _buildOtpField(i)),
+        ),
+        const SizedBox(height: 32),
+
+        // Verify button
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: auth.isLoading
+                ? null
+                : () {
+                    HapticFeedback.mediumImpact();
+                    _verifyOtp();
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0033A0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1),
+            ),
+            child: auth.isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('ПОДТВЕРДИТЬ'),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Resend / timer
+        _resendSeconds > 0
+            ? Text(
+                'Отправить повторно через ${_resendSeconds}с',
+                style: TextStyle(fontSize: 13, color: AppColors.textTertiary),
+              )
+            : TextButton(
+                onPressed: auth.isLoading ? null : _resendOtp,
+                child: Text(
+                  'Отправить код повторно',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0033A0),
+                  ),
+                ),
+              ),
+
+        const SizedBox(height: 16),
+
+        // Back to phone input
+        TextButton(
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            setState(() {
+              _otpSent = false;
+              for (final c in _otpCtrls) {
+                c.clear();
+              }
+              _resendTimer?.cancel();
+              _resendSeconds = 0;
+            });
+          },
+          child: Text(
+            'Изменить номер',
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtpField(int index) {
+    return Container(
+      width: 56,
+      height: 64,
+      margin: const EdgeInsets.symmetric(horizontal: 6),
+      child: TextField(
+        controller: _otpCtrls[index],
+        focusNode: _otpFocusNodes[index],
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 1,
+        style: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          counterText: '',
+          filled: true,
+          fillColor: AppColors.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.divider),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.divider),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFF0033A0), width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+        onChanged: (value) {
+          if (value.isNotEmpty && index < 3) {
+            _otpFocusNodes[index + 1].requestFocus();
+          }
+          // Auto-submit when all 4 digits entered
+          if (index == 3 && value.isNotEmpty) {
+            final code = _otpCtrls.map((c) => c.text).join();
+            if (code.length == 4) {
+              _verifyOtp();
+            }
+          }
+          // Handle backspace — go to previous field
+          if (value.isEmpty && index > 0) {
+            _otpFocusNodes[index - 1].requestFocus();
+          }
+        },
+      ),
     );
   }
 }

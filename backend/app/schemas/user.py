@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class UserOut(BaseModel):
     id: uuid.UUID
-    phone: str
+    phone: str | None = None
     full_name: str
     email: str | None = None
     avatar_url: str | None = None

@@ -143,56 +143,24 @@ class ApiService {
 
   // ── Auth helpers ──────────────────────────────────────────────────────
 
-  /// POST /api/v1/auth/login and persist the returned tokens.
-  static Future<Map<String, dynamic>> login(
+  /// POST /api/v1/auth/send-otp — request OTP for phone number.
+  /// Returns the full response data (includes otp_code for dev testing).
+  static Future<Map<String, dynamic>> sendOtp(String phone) async {
+    final response = await _dio.post(
+      '/api/v1/auth/send-otp',
+      data: {'phone': phone},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  /// POST /api/v1/auth/verify-otp — verify OTP and get tokens.
+  static Future<Map<String, dynamic>> verifyOtp(
     String phone,
-    String password,
+    String otpCode,
   ) async {
     final response = await _dio.post(
-      '/api/v1/auth/login',
-      data: {'phone': phone, 'password': password},
-    );
-
-    final data = response.data as Map<String, dynamic>;
-    final access = data['access_token'] as String?;
-    final refresh = data['refresh_token'] as String?;
-
-    if (access != null && refresh != null) {
-      await setTokens(access, refresh);
-    }
-
-    return data;
-  }
-
-  /// POST /api/v1/auth/apple — Sign in with Apple identity token.
-  static Future<Map<String, dynamic>> appleAuth(
-    String identityToken, {
-    String? fullName,
-  }) async {
-    final response = await _dio.post(
-      '/api/v1/auth/apple',
-      data: {
-        'identity_token': identityToken,
-        if (fullName != null) 'full_name': fullName,
-      },
-    );
-
-    final data = response.data as Map<String, dynamic>;
-    final access = data['access_token'] as String?;
-    final refresh = data['refresh_token'] as String?;
-
-    if (access != null && refresh != null) {
-      await setTokens(access, refresh);
-    }
-
-    return data;
-  }
-
-  /// POST /api/v1/auth/google — Sign in with Google ID token.
-  static Future<Map<String, dynamic>> googleAuth(String idToken) async {
-    final response = await _dio.post(
-      '/api/v1/auth/google',
-      data: {'id_token': idToken},
+      '/api/v1/auth/verify-otp',
+      data: {'phone': phone, 'otp_code': otpCode},
     );
 
     final data = response.data as Map<String, dynamic>;

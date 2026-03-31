@@ -1,16 +1,19 @@
 from pydantic import BaseModel
 
 
-class RegisterRequest(BaseModel):
+class SendOtpRequest(BaseModel):
     phone: str
-    password: str
-    full_name: str = ""
-    referral_code: str | None = None
 
 
-class LoginRequest(BaseModel):
+class SendOtpResponse(BaseModel):
+    """Response from send-otp. Includes otp_code for dev/testing — remove when real SMS is connected."""
+    message: str = "OTP sent"
+    otp_code: str  # TODO: remove this field when real SMS provider is connected
+
+
+class VerifyOtpRequest(BaseModel):
     phone: str
-    password: str
+    otp_code: str
 
 
 class TokenResponse(BaseModel):
@@ -21,12 +24,3 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
-
-
-class AppleAuthRequest(BaseModel):
-    identity_token: str
-    full_name: str | None = None
-
-
-class GoogleAuthRequest(BaseModel):
-    id_token: str

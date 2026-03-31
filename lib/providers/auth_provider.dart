@@ -1,11 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
-import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../models/user.dart';
 import '../models/loyalty.dart';
 import '../services/api_service.dart';
@@ -29,78 +24,38 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   String? get qrToken => _qrToken;
 
-  // ── Real auth ─────────────────────────────────────────────────────────
+  // ── OTP auth flow ─────────────────────────────────────────────────────
 
-  /// Login with phone + password via FastAPI backend.
-  Future<void> login(String phone, String password) async {
+  /// Send OTP to the given phone number.
+  /// Returns the OTP code from backend (for dev auto-fill).
+  Future<String?> sendOtp(String phone) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await ApiService.login(phone, password);
-    } catch (e) {
-      _error = 'Ошибка входа: $e';
-      _isLoggedIn = false;
+      final data = await ApiService.sendOtp(phone);
       _isLoading = false;
       notifyListeners();
-      return;
-    }
-
-    try {
-      await fetchProfile();
+      return data['otp_code'] as String?;
     } catch (e) {
-      _error = 'Ошибка профиля: $e';
-      _isLoggedIn = false;
+      _error = 'Ошибка отправки кода: $e';
       _isLoading = false;
       notifyListeners();
-      return;
+      return null;
     }
-
-    try {
-      await fetchLoyalty();
-    } catch (e) {
-      // Non-fatal — continue login even if loyalty fails
-      debugPrint('[AuthProvider] fetchLoyalty error: $e');
-    }
-
-    _isLoggedIn = true;
-    startQrRefresh();
-    if (_user != null) {
-      Analytics.identify(_user!.id, phone: _user!.phone, name: _user!.name, tier: _loyalty?.tierName);
-    }
-    _isLoading = false;
-    notifyListeners();
   }
 
-  /// Register a new account, then auto-login.
-  Future<void> register(String phone, String password, String name,
-      {String? referralCode}) async {
+  /// Verify OTP code and complete login/registration.
+  Future<void> verifyOtp(String phone, String otpCode) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await ApiService.dio.post(
-        '/api/v1/auth/register',
-        data: {
-          'phone': phone,
-          'password': password,
-          'full_name': name,
-          if (referralCode != null) 'referral_code': referralCode,
-        },
-      );
-
-      final data = response.data as Map<String, dynamic>;
-      final access = data['access_token'] as String?;
-      final refresh = data['refresh_token'] as String?;
-
-      if (access != null && refresh != null) {
-        await ApiService.setTokens(access, refresh);
-      }
+      await ApiService.verifyOtp(phone, otpCode);
     } catch (e) {
-      _error = 'Ошибка регистрации: $e';
-      _isLoggedIn = false;
+      _error = 'Неверный код';
       _isLoading = false;
       notifyListeners();
       return;
@@ -129,124 +84,6 @@ class AuthProvider extends ChangeNotifier {
     }
     _isLoading = false;
     notifyListeners();
-  }
-
-  // ── Apple Sign In ──────────────────────────────────────────────────
-
-  Future<void> signInWithApple() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      // Generate nonce for security
-      final rawNonce = _generateNonce();
-      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
-
-      final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-        nonce: hashedNonce,
-      );
-
-      final identityToken = credential.identityToken;
-      if (identityToken == null) {
-        throw Exception('Apple Sign In: no identity token');
-      }
-
-      // Build full name if provided (Apple only sends name on first sign-in)
-      String? fullName;
-      if (credential.givenName != null || credential.familyName != null) {
-        fullName = [credential.givenName, credential.familyName]
-            .where((s) => s != null && s.isNotEmpty)
-            .join(' ');
-      }
-
-      await ApiService.appleAuth(identityToken, fullName: fullName);
-    } catch (e) {
-      if (e.toString().contains('AuthorizationErrorCode.canceled')) {
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-      _error = 'Ошибка Apple Sign In: $e';
-      _isLoggedIn = false;
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-
-    await _finishOAuthLogin();
-  }
-
-  // ── Google Sign In ─────────────────────────────────────────────────
-
-  Future<void> signInWithGoogle() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final googleSignIn = GoogleSignIn(scopes: ['email']);
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        // User cancelled
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
-      if (idToken == null) {
-        throw Exception('Google Sign In: no ID token');
-      }
-
-      await ApiService.googleAuth(idToken);
-    } catch (e) {
-      _error = 'Ошибка Google Sign In: $e';
-      _isLoggedIn = false;
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-
-    await _finishOAuthLogin();
-  }
-
-  /// Shared post-OAuth flow: fetch profile, loyalty, start QR.
-  Future<void> _finishOAuthLogin() async {
-    try {
-      await fetchProfile();
-    } catch (e) {
-      _error = 'Ошибка профиля: $e';
-      _isLoggedIn = false;
-      _isLoading = false;
-      notifyListeners();
-      return;
-    }
-
-    try {
-      await fetchLoyalty();
-    } catch (e) {
-      debugPrint('[AuthProvider] fetchLoyalty error: $e');
-    }
-
-    _isLoggedIn = true;
-    startQrRefresh();
-    if (_user != null) {
-      Analytics.identify(_user!.id, phone: _user!.phone, name: _user!.name, tier: _loyalty?.tierName);
-    }
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  String _generateNonce([int length = 32]) {
-    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
-    final random = Random.secure();
-    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
   }
 
   /// Fetch user profile from GET /api/v1/users/me.
@@ -290,18 +127,14 @@ class AuthProvider extends ChangeNotifier {
         );
       } catch (e) {
         debugPrint('[AuthProvider] fetchLoyalty transactions error: $e');
-        // Non-fatal: loyalty account still available without transactions
       }
     } catch (e) {
       debugPrint('[AuthProvider] fetchLoyalty error: $e');
-      // Non-fatal during login — loyalty is secondary
     }
   }
 
   // ── Rotating QR token methods ──────────────────────────────────────────
 
-  /// Fetch a signed, rotating QR token from GET /api/v1/loyalty/me/qr.
-  /// Falls back to loyalty.qrCode on failure.
   Future<void> fetchQrToken() async {
     try {
       final response = await ApiService.dio.get('/api/v1/loyalty/me/qr');
@@ -310,7 +143,6 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('[AuthProvider] fetchQrToken error: $e');
-      // Fallback: use the static loyalty QR code if the rotating endpoint fails
       if (_qrToken == null && _loyalty != null) {
         _qrToken = _loyalty!.qrCode;
         notifyListeners();
@@ -318,10 +150,8 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Start periodic QR token refresh every 25 seconds (before the 30s expiry).
   void startQrRefresh() {
     stopQrRefresh();
-    // Fetch immediately, then repeat every 25 seconds
     fetchQrToken();
     _qrRefreshTimer = Timer.periodic(
       const Duration(seconds: 25),
@@ -329,7 +159,6 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
-  /// Cancel the QR refresh timer.
   void stopQrRefresh() {
     _qrRefreshTimer?.cancel();
     _qrRefreshTimer = null;
@@ -350,14 +179,11 @@ class AuthProvider extends ChangeNotifier {
       }
     } on DioException catch (e) {
       debugPrint('[AuthProvider] tryRestoreSession error: $e');
-      // Only clear tokens on definitive auth failure (401 after refresh failed).
-      // Network errors / timeouts should NOT destroy the session.
       final code = e.response?.statusCode;
       if (code == 401 || code == 403) {
         await ApiService.logout();
         _isLoggedIn = false;
       }
-      // For network errors, leave tokens intact — user can retry later.
     } catch (e) {
       debugPrint('[AuthProvider] tryRestoreSession error: $e');
     } finally {
@@ -365,8 +191,6 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  // ── Demo fallback ─────────────────────────────────────────────────────
 
   // ── Logout ────────────────────────────────────────────────────────────
 
@@ -391,7 +215,4 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────────
-
 }
