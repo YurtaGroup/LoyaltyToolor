@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -195,6 +196,79 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: auth.isLoading
                           ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : Text(_isLogin ? 'ВОЙТИ' : 'СОЗДАТЬ АККАУНТ'),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── OAuth divider ──
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: AppColors.divider, thickness: 0.5)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text('или', style: TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                      ),
+                      Expanded(child: Divider(color: AppColors.divider, thickness: 0.5)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Apple Sign In ──
+                  if (Platform.isIOS)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: auth.isLoading ? null : () {
+                          HapticFeedback.mediumImpact();
+                          auth.signInWithApple().then((_) {
+                            if (!mounted) return;
+                            if (auth.error != null) {
+                              _showError(auth.error!);
+                              auth.clearError();
+                            } else if (auth.isLoggedIn) {
+                              Navigator.of(context).pop();
+                            }
+                          });
+                        },
+                        icon: const Icon(Icons.apple, size: 22, color: Colors.white),
+                        label: const Text('Войти через Apple', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+
+                  if (Platform.isIOS) const SizedBox(height: 12),
+
+                  // ── Google Sign In ──
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: auth.isLoading ? null : () {
+                        HapticFeedback.mediumImpact();
+                        auth.signInWithGoogle().then((_) {
+                          if (!mounted) return;
+                          if (auth.error != null) {
+                            _showError(auth.error!);
+                            auth.clearError();
+                          } else if (auth.isLoggedIn) {
+                            Navigator.of(context).pop();
+                          }
+                        });
+                      },
+                      icon: Image.asset('assets/images/google_logo.png', width: 20, height: 20,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 24)),
+                      label: Text('Войти через Google', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: AppColors.surface,
+                        side: BorderSide(color: AppColors.divider),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
                     ),
                   ),
 

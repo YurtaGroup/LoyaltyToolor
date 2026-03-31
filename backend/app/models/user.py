@@ -12,8 +12,8 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
-    phone: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    phone: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False, default="")
     full_name: Mapped[str] = mapped_column(String, default="")
     email: Mapped[str | None] = mapped_column(String, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -24,6 +24,8 @@ class Profile(Base):
     referred_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True
     )
+    apple_id: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
+    google_id: Mapped[str | None] = mapped_column(String, unique=True, nullable=True)
     fcm_token: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

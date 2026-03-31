@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../models/user.dart';
 import '../models/loyalty.dart';
 import '../services/api_service.dart';
@@ -124,6 +129,124 @@ class AuthProvider extends ChangeNotifier {
     }
     _isLoading = false;
     notifyListeners();
+  }
+
+  // ── Apple Sign In ──────────────────────────────────────────────────
+
+  Future<void> signInWithApple() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // Generate nonce for security
+      final rawNonce = _generateNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final identityToken = credential.identityToken;
+      if (identityToken == null) {
+        throw Exception('Apple Sign In: no identity token');
+      }
+
+      // Build full name if provided (Apple only sends name on first sign-in)
+      String? fullName;
+      if (credential.givenName != null || credential.familyName != null) {
+        fullName = [credential.givenName, credential.familyName]
+            .where((s) => s != null && s.isNotEmpty)
+            .join(' ');
+      }
+
+      await ApiService.appleAuth(identityToken, fullName: fullName);
+    } catch (e) {
+      if (e.toString().contains('AuthorizationErrorCode.canceled')) {
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+      _error = 'Ошибка Apple Sign In: $e';
+      _isLoggedIn = false;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    await _finishOAuthLogin();
+  }
+
+  // ── Google Sign In ─────────────────────────────────────────────────
+
+  Future<void> signInWithGoogle() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email']);
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        // User cancelled
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final auth = await account.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        throw Exception('Google Sign In: no ID token');
+      }
+
+      await ApiService.googleAuth(idToken);
+    } catch (e) {
+      _error = 'Ошибка Google Sign In: $e';
+      _isLoggedIn = false;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    await _finishOAuthLogin();
+  }
+
+  /// Shared post-OAuth flow: fetch profile, loyalty, start QR.
+  Future<void> _finishOAuthLogin() async {
+    try {
+      await fetchProfile();
+    } catch (e) {
+      _error = 'Ошибка профиля: $e';
+      _isLoggedIn = false;
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    try {
+      await fetchLoyalty();
+    } catch (e) {
+      debugPrint('[AuthProvider] fetchLoyalty error: $e');
+    }
+
+    _isLoggedIn = true;
+    startQrRefresh();
+    if (_user != null) {
+      Analytics.identify(_user!.id, phone: _user!.phone, name: _user!.name, tier: _loyalty?.tierName);
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  String _generateNonce([int length = 32]) {
+    const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)]).join();
   }
 
   /// Fetch user profile from GET /api/v1/users/me.

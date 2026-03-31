@@ -5,11 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db
 from app.models.loyalty import LoyaltyAccount
 from app.models.user import Profile
-from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import (
+    AppleAuthRequest,
+    GoogleAuthRequest,
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 from app.services.auth_service import (
     create_access_token,
+    create_oauth_user_with_loyalty,
     create_refresh_token,
     create_user_with_loyalty,
+    verify_apple_identity_token,
+    verify_google_id_token,
     verify_password,
     verify_token,
 )
@@ -65,6 +75,86 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
             await db.commit()
 
     await log_event(db, user.id, "login", {"method": "phone"})
+    await db.commit()
+    track_login(str(user.id))
+    return TokenResponse(
+        access_token=create_access_token(user),
+        refresh_token=create_refresh_token(user),
+    )
+
+
+@router.post("/apple", response_model=TokenResponse)
+async def apple_auth(body: AppleAuthRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        claims = await verify_apple_identity_token(body.identity_token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Apple identity token")
+
+    apple_sub = claims["sub"]
+    email = claims.get("email")
+
+    # Check if user already exists by apple_id
+    result = await db.execute(select(Profile).where(Profile.apple_id == apple_sub))
+    user = result.scalar_one_or_none()
+
+    if not user and email:
+        # Check if user exists by email — link accounts
+        result = await db.execute(select(Profile).where(Profile.email == email))
+        user = result.scalar_one_or_none()
+        if user:
+            user.apple_id = apple_sub
+            await db.flush()
+
+    if not user:
+        # New user
+        full_name = body.full_name or email or ""
+        user = await create_oauth_user_with_loyalty(
+            db, full_name=full_name, email=email, apple_id=apple_sub,
+        )
+        await log_event(db, user.id, "signup", {"method": "apple"})
+        track_signup(str(user.id), email or "", None)
+
+    await log_event(db, user.id, "login", {"method": "apple"})
+    await db.commit()
+    track_login(str(user.id))
+    return TokenResponse(
+        access_token=create_access_token(user),
+        refresh_token=create_refresh_token(user),
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+async def google_auth(body: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        claims = verify_google_id_token(body.id_token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Google ID token")
+
+    google_sub = claims["sub"]
+    email = claims.get("email")
+    name = claims.get("name", "")
+
+    # Check if user already exists by google_id
+    result = await db.execute(select(Profile).where(Profile.google_id == google_sub))
+    user = result.scalar_one_or_none()
+
+    if not user and email:
+        # Check if user exists by email — link accounts
+        result = await db.execute(select(Profile).where(Profile.email == email))
+        user = result.scalar_one_or_none()
+        if user:
+            user.google_id = google_sub
+            await db.flush()
+
+    if not user:
+        # New user
+        user = await create_oauth_user_with_loyalty(
+            db, full_name=name, email=email, google_id=google_sub,
+        )
+        await log_event(db, user.id, "signup", {"method": "google"})
+        track_signup(str(user.id), email or "", None)
+
+    await log_event(db, user.id, "login", {"method": "google"})
     await db.commit()
     track_login(str(user.id))
     return TokenResponse(
