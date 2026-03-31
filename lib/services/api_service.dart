@@ -62,14 +62,13 @@ class ApiService {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    // Retry once on 502 (Vercel cold start timeout)
+    // Retry once on 502 (transient gateway error)
     if (err.response?.statusCode == 502) {
       final opts = err.requestOptions;
       if (opts.extra['_retried'] != true) {
         opts.extra['_retried'] = true;
         try {
-          // Wait for function to warm up, then retry
-          await Future.delayed(const Duration(seconds: 2));
+          await Future.delayed(const Duration(seconds: 1));
           final response = await _dio.fetch(opts);
           return handler.resolve(response);
         } on DioException catch (e) {
@@ -98,7 +97,6 @@ class ApiService {
   }
 
   /// Attempt to exchange the refresh token for a new access token.
-  /// Retries once on 502 (Render cold-start).
   static Future<bool> _tryRefreshToken() async {
     final refresh = await _storage.read(key: _refreshTokenKey);
     if (refresh == null) return false;
@@ -117,9 +115,9 @@ class ApiService {
           data: {'refresh_token': refresh},
         );
       } on DioException catch (e) {
-        // Retry once on 502 (cold-start)
+        // Retry once on transient 502
         if (e.response?.statusCode == 502) {
-          await Future.delayed(const Duration(seconds: 2));
+          await Future.delayed(const Duration(seconds: 1));
           response = await plainDio.post(
             '/api/v1/auth/refresh',
             data: {'refresh_token': refresh},

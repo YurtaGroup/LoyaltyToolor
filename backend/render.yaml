@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: free
+    plan: starter
     envVars:
       - key: DATABASE_URL
         value: postgresql+asyncpg://neondb_owner:npg_3NKgvsFrW5io@ep-blue-boat-amiwae15-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require

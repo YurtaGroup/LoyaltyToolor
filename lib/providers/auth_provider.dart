@@ -319,7 +319,7 @@ class AuthProvider extends ChangeNotifier {
     } on DioException catch (e) {
       debugPrint('[AuthProvider] tryRestoreSession error: $e');
       // Only clear tokens on definitive auth failure (401 after refresh failed).
-      // Network errors / timeouts / cold-start 502s should NOT destroy the session.
+      // Network errors / timeouts should NOT destroy the session.
       final code = e.response?.statusCode;
       if (code == 401 || code == 403) {
         await ApiService.logout();
