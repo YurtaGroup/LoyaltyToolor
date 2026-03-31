@@ -297,16 +297,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Widget _validCard(_Customer c) {
     final tierColors = {
-      'bronze': Colors.orange,
-      'silver': Colors.grey,
-      'gold': Colors.amber,
-      'platinum': Colors.purple,
+      'kulun': Colors.orange,
+      'tai': Colors.grey,
+      'kunan': Colors.amber,
+      'at': Colors.purple,
     };
     final tierNames = {
-      'bronze': 'Бронза',
-      'silver': 'Серебро',
-      'gold': 'Золото',
-      'platinum': 'Платина',
+      'kulun': 'Кулун',
+      'tai': 'Тай',
+      'kunan': 'Кунан',
+      'at': 'Ат',
     };
     final color = tierColors[c.tier] ?? Colors.grey;
 

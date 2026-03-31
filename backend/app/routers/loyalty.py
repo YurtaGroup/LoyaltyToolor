@@ -66,7 +66,7 @@ async def get_my_transactions(
     }
 
 
-TIER_CASHBACK = {"bronze": 3, "silver": 5, "gold": 8, "platinum": 12}
+TIER_CASHBACK = {"kulun": 3, "tai": 5, "kunan": 8, "at": 12}
 
 
 def _sign_qr(payload: str) -> str:

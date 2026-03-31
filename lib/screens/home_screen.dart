@@ -81,6 +81,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
+        // Show loading splash while restoring session
+        if (auth.isLoading && !auth.isLoggedIn) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset('assets/images/toolor_logo.png', width: 160),
+                const SizedBox(height: 24),
+                const CircularProgressIndicator(),
+              ],
+            ),
+          );
+        }
         if (!auth.isLoggedIn) return _welcome(auth);
         return _home(context, auth);
       },
@@ -158,11 +171,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   // ─── Main Home ───────────────────────────────────────────────────
   Widget _home(BuildContext context, AuthProvider auth) {
     final loyalty = auth.loyalty;
-    if (loyalty == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
 
-    if (_isLoading) {
+    if (_isLoading || loyalty == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -260,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Привет, ${auth.user?.name.split(' ').first ?? ''}',
+                  'Привет, ${(auth.user?.name ?? '').isNotEmpty ? auth.user!.name.split(' ').first : ''}',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
                 const SizedBox(height: S.x2),
@@ -278,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               borderRadius: BorderRadius.circular(R.sm),
             ),
             child: Center(
-              child: Text(auth.user?.name[0] ?? '', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+              child: Text((auth.user?.name ?? '').isNotEmpty ? auth.user!.name[0] : '?', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
             ),
           ),
         ],
@@ -326,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   Text('${loyalty.points}', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1)),
                   const SizedBox(height: S.x2),
                   Text('баллов', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                  if (loyalty.tier != LoyaltyTier.platinum) ...[
+                  if (loyalty.tier != LoyaltyTier.at) ...[
                     const SizedBox(height: S.x12),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(2),
@@ -367,41 +377,229 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _showQR(BuildContext context, LoyaltyAccount loyalty) {
+    final tierIndex = LoyaltyTier.values.indexOf(loyalty.tier);
+    final tiers = [
+      ('Кулун', '3% кэшбэк', 'Пройти регистрацию', LoyaltyTier.kulun, AppColors.bronze),
+      ('Тай', '5% кэшбэк', 'от 50 000 сом', LoyaltyTier.tai, AppColors.silver),
+      ('Кунан', '8% кэшбэк', 'от 150 000 сом', LoyaltyTier.kunan, AppColors.goldTier),
+      ('Ат', '12% кэшбэк', 'от 300 000 сом', LoyaltyTier.at, AppColors.platinum),
+    ];
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Consumer<AuthProvider>(
         builder: (ctx, auth, _) {
           final qrData = auth.qrToken ?? loyalty.qrCode;
+          final tc = _tierColor(loyalty.tier);
+          final remaining = loyalty.tier != LoyaltyTier.at
+              ? (loyalty.nextTierThreshold - loyalty.totalSpent).toStringAsFixed(0)
+              : '';
+
           return Container(
-            margin: const EdgeInsets.fromLTRB(S.x16, 0, S.x16, S.x16),
-            padding: const EdgeInsets.symmetric(horizontal: S.x32, vertical: S.x32),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(R.xl)),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('ПОКАЖИТЕ НА КАССЕ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 2, color: AppColors.textSecondary)),
-                    const SizedBox(width: S.x8),
-                    _QrPulseIndicator(),
-                  ],
-                ),
-                const SizedBox(height: S.x24),
+                // Handle bar
                 Container(
-                  padding: const EdgeInsets.all(S.x16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.lg)),
-                  child: auth.qrToken != null
-                      ? QrImageView(data: qrData, version: QrVersions.auto, size: 220, backgroundColor: Colors.white)
-                      : const SizedBox(width: 220, height: 220, child: Center(child: CircularProgressIndicator())),
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
                 ),
-                const SizedBox(height: S.x16),
-                Text(
-                  auth.qrToken != null ? 'QR обновляется автоматически' : 'Загрузка...',
-                  style: TextStyle(fontSize: 13, color: AppColors.textTertiary, letterSpacing: 2, fontWeight: FontWeight.w500),
+
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Current tier header ──
+                        Text(loyalty.tierName, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                        const SizedBox(height: 8),
+                        if (loyalty.tier != LoyaltyTier.at)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                            child: Text(
+                              '$remaining сом до ${_nextTier(loyalty.tier)}',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tc),
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                            child: Text('Максимальный уровень', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tc)),
+                          ),
+
+                        const SizedBox(height: 20),
+                        Divider(color: AppColors.divider),
+                        const SizedBox(height: 16),
+
+                        // ── QR Code ──
+                        Center(
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text('ПОКАЖИТЕ НА КАССЕ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 2, color: AppColors.textSecondary)),
+                                  const SizedBox(width: S.x8),
+                                  _QrPulseIndicator(),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.lg)),
+                                child: auth.qrToken != null
+                                    ? QrImageView(data: qrData, version: QrVersions.auto, size: 180, backgroundColor: Colors.white)
+                                    : const SizedBox(width: 180, height: 180, child: Center(child: CircularProgressIndicator())),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+                        Divider(color: AppColors.divider),
+                        const SizedBox(height: 16),
+
+                        // ── Description ──
+                        Text(
+                          'Каждый наш покупатель автоматически становится участником бонусной программы. Совершайте покупки и получайте кэшбэк баллами!',
+                          style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // ── Tier roadmap ──
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: Column(
+                            children: List.generate(tiers.length, (i) {
+                              final (name, cashback, condition, tier, color) = tiers[i];
+                              final isActive = i <= tierIndex;
+                              final isCurrent = i == tierIndex;
+                              final isLast = i == tiers.length - 1;
+
+                              return Column(
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // ── Timeline column ──
+                                      SizedBox(
+                                        width: 32,
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              width: 28, height: 28,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: isActive ? color : AppColors.surfaceBright,
+                                                border: isCurrent ? Border.all(color: color, width: 2.5) : null,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  '${i + 1}',
+                                                  style: TextStyle(
+                                                    fontSize: 13, fontWeight: FontWeight.w700,
+                                                    color: isActive ? Colors.white : AppColors.textTertiary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+
+                                      // ── Tier info ──
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Text(name, style: TextStyle(
+                                                  fontSize: 16, fontWeight: FontWeight.w700,
+                                                  color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+                                                )),
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: isActive ? color.withValues(alpha: 0.15) : AppColors.surfaceBright,
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: Text(cashback, style: TextStyle(
+                                                    fontSize: 12, fontWeight: FontWeight.w600,
+                                                    color: isActive ? color : AppColors.textTertiary,
+                                                  )),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(condition, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  // ── Connecting line ──
+                                  if (!isLast)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 13),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Container(
+                                          width: 2, height: 32,
+                                          color: i < tierIndex ? color : AppColors.surfaceBright,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            }),
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // ── Rules link ──
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const _LoyaltyRulesScreen()));
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              border: Border(top: BorderSide(color: AppColors.divider)),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Правила программы лояльности', style: TextStyle(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                                Icon(Icons.arrow_forward, size: 18, color: AppColors.textTertiary),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: S.x8),
               ],
             ),
           );
@@ -496,17 +694,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   // ─── Helpers ─────────────────────────────────────────────────────
   Color _tierColor(LoyaltyTier t) => switch (t) {
-    LoyaltyTier.bronze => AppColors.bronze,
-    LoyaltyTier.silver => AppColors.silver,
-    LoyaltyTier.gold => AppColors.goldTier,
-    LoyaltyTier.platinum => AppColors.platinum,
+    LoyaltyTier.kulun => AppColors.bronze,
+    LoyaltyTier.tai => AppColors.silver,
+    LoyaltyTier.kunan => AppColors.goldTier,
+    LoyaltyTier.at => AppColors.platinum,
   };
 
   String _nextTier(LoyaltyTier t) => switch (t) {
-    LoyaltyTier.bronze => 'Silver',
-    LoyaltyTier.silver => 'Gold',
-    LoyaltyTier.gold => 'Platinum',
-    LoyaltyTier.platinum => '',
+    LoyaltyTier.kulun => 'Тай',
+    LoyaltyTier.tai => 'Кунан',
+    LoyaltyTier.kunan => 'Ат',
+    LoyaltyTier.at => '',
   };
 
   void _open(BuildContext context, Product p, String tag) {
@@ -572,6 +770,106 @@ class _QrPulseIndicatorState extends State<_QrPulseIndicator>
               letterSpacing: 1,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Loyalty Rules Screen
+// ═══════════════════════════════════════════════════════════════════
+
+class _LoyaltyRulesScreen extends StatelessWidget {
+  const _LoyaltyRulesScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Правила программы')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Правила программы лояльности TOOLOR',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const SizedBox(height: 24),
+
+            _rule('1', 'С момента регистрации Участник безоговорочно принимает настоящие Правила и имеет право на получение Привилегий.'),
+            _rule('2', 'При совершении покупки товаров с использованием баллов, кэшбэк начисляется только за ту часть покупки, которая была оплачена денежными средствами.'),
+            _rule('3', 'Для участия в Программе необходимо скачать приложение и пройти регистрацию.'),
+            _rule('4', 'Процент кэшбэка увеличивается в зависимости от уровня Участника.'),
+            _rule('5', 'При каждой покупке необходимо показать QR-код на кассе для начисления баллов.'),
+
+            const SizedBox(height: 28),
+            Text('УРОВНИ И КЭШБЭК', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+
+            _tierRow('Кулун', '3%', 'Пройти регистрацию', AppColors.bronze),
+            _tierRow('Тай', '5%', 'от 50 000 сом покупок', AppColors.silver),
+            _tierRow('Кунан', '8%', 'от 150 000 сом покупок', AppColors.goldTier),
+            _tierRow('Ат', '12%', 'от 300 000 сом покупок', AppColors.platinum),
+
+            const SizedBox(height: 28),
+            Text('СРОК ДЕЙСТВИЯ БАЛЛОВ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: AppColors.textPrimary)),
+            const SizedBox(height: 12),
+            Text(
+              'Накопленные баллы должны быть потрачены в течение 90 календарных дней. По истечению 90 дней после последней покупки с использованием QR-кода все накопленные баллы сгорают.',
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _rule(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 24, height: 24,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.accent.withValues(alpha: 0.1)),
+            child: Center(child: Text(number, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accent))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tierRow(String name, String cashback, String condition, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8, height: 8,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(condition, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+              ],
+            ),
+          ),
+          Text(cashback, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
         ],
       ),
     );

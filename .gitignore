@@ -34,12 +34,7 @@ migrate_working_dir/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-/build/android/
-/build/ios/
-/build/macos/
-/build/linux/
-/build/windows/
-# build/web is tracked for Vercel deployment
+/build/
 /coverage/
 
 # Symbolication related
@@ -55,15 +50,16 @@ app.*.map.json
 
 # Backend
 backend/.venv/
-backend/__pycache__/
-backend/app/__pycache__/
 backend/uploads/
-*.pyc
+**/__pycache__/
 
 # Admin panel
 admin/node_modules/
 admin/.next/
 admin/out/
+
+# Root build artifacts
+.next/
 
 # Docker
 pgdata/

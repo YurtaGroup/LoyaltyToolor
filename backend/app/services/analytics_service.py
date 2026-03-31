@@ -56,7 +56,7 @@ def track_signup(user_id: str, phone: str, referral_code: str | None = None):
     set_user(user_id, {
         "$phone": phone,
         "$created": datetime.utcnow().isoformat(),
-        "tier": "bronze",
+        "tier": "kulun",
         "points": 0,
     })
 

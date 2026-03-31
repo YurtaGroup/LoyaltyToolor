@@ -45,7 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final auth = context.read<AuthProvider>();
     final name = auth.isLoggedIn ? auth.user!.name.split(' ').first : 'друг';
-    final tier = auth.loyalty?.tierName ?? 'Bronze';
+    final tier = auth.loyalty?.tierName ?? 'Кулун';
     final pts = auth.loyalty?.points ?? 0;
 
     _addLocalBot('Привет, $name! 👋 Я — AI-стилист TOOLOR. Помогу подобрать образ, расскажу про акции и бонусы.');

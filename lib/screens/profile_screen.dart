@@ -461,7 +461,7 @@ class ProfileScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: S.x16),
-          if (l.tier != LoyaltyTier.platinum) ...[
+          if (l.tier != LoyaltyTier.at) ...[
             // Progress bar
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -515,32 +515,32 @@ class ProfileScreen extends StatelessWidget {
   }
 
   (Color, String) _tierInfo(LoyaltyTier tier) => switch (tier) {
-    LoyaltyTier.bronze => (AppColors.bronze, 'Bronze'),
-    LoyaltyTier.silver => (AppColors.silver, 'Silver'),
-    LoyaltyTier.gold => (AppColors.goldTier, 'Gold'),
-    LoyaltyTier.platinum => (AppColors.platinum, 'Platinum'),
+    LoyaltyTier.kulun => (AppColors.bronze, 'Кулун'),
+    LoyaltyTier.tai => (AppColors.silver, 'Тай'),
+    LoyaltyTier.kunan => (AppColors.goldTier, 'Кунан'),
+    LoyaltyTier.at => (AppColors.platinum, 'Ат'),
   };
 
   String _nextTierName(LoyaltyTier tier) => switch (tier) {
-    LoyaltyTier.bronze => 'Silver',
-    LoyaltyTier.silver => 'Gold',
-    LoyaltyTier.gold => 'Platinum',
-    LoyaltyTier.platinum => 'Platinum',
+    LoyaltyTier.kulun => 'Тай',
+    LoyaltyTier.tai => 'Кунан',
+    LoyaltyTier.kunan => 'Ат',
+    LoyaltyTier.at => 'Ат',
   };
 
   Color _nextTierColor(LoyaltyTier tier) => switch (tier) {
-    LoyaltyTier.bronze => AppColors.silver,
-    LoyaltyTier.silver => AppColors.goldTier,
-    LoyaltyTier.gold => AppColors.platinum,
-    LoyaltyTier.platinum => AppColors.platinum,
+    LoyaltyTier.kulun => AppColors.silver,
+    LoyaltyTier.tai => AppColors.goldTier,
+    LoyaltyTier.kunan => AppColors.platinum,
+    LoyaltyTier.at => AppColors.platinum,
   };
 
   Widget _tiers(LoyaltyAccount l) {
     final tiers = [
-      ('BRONZE', '3%', '0', LoyaltyTier.bronze, AppColors.bronze),
-      ('SILVER', '5%', '50K', LoyaltyTier.silver, AppColors.silver),
-      ('GOLD', '8%', '150K', LoyaltyTier.gold, AppColors.goldTier),
-      ('PLATINUM', '12%', '300K', LoyaltyTier.platinum, AppColors.platinum),
+      ('КУЛУН', '3%', '0', LoyaltyTier.kulun, AppColors.bronze),
+      ('ТАЙ', '5%', '50K', LoyaltyTier.tai, AppColors.silver),
+      ('КУНАН', '8%', '150K', LoyaltyTier.kunan, AppColors.goldTier),
+      ('АТ', '12%', '300K', LoyaltyTier.at, AppColors.platinum),
     ];
 
     return Container(

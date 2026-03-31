@@ -64,8 +64,8 @@ async def _build_user_context(db: AsyncSession, user_id: uuid.UUID) -> str:
     )
     loyalty = result.scalar_one_or_none()
     if loyalty:
-        tier_names = {"bronze": "Бронза", "silver": "Серебро", "gold": "Золото", "platinum": "Платина"}
-        cashback = {"bronze": 3, "silver": 5, "gold": 8, "platinum": 12}
+        tier_names = {"kulun": "Кулун", "tai": "Тай", "kunan": "Кунан", "at": "Ат"}
+        cashback = {"kulun": 3, "tai": 5, "kunan": 8, "at": 12}
         parts.append(
             f"Клиент: уровень {tier_names.get(loyalty.tier, loyalty.tier)}, "
             f"{loyalty.points} баллов, потрачено {loyalty.total_spent} сом, "

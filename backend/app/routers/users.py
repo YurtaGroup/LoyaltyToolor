@@ -67,8 +67,8 @@ async def set_birthday(
         notification = Notification(
             user_id=user.id,
             type="bonus",
-            title="Бонус +1000 баллов! \U0001f389",
-            body="Спасибо, что указали дату рождения! Мы начислили вам 1000 бонусных баллов.",
+            title=f"Бонус +{BIRTHDAY_BONUS_POINTS} баллов! \U0001f389",
+            body=f"Спасибо, что указали дату рождения! Мы начислили вам {BIRTHDAY_BONUS_POINTS} бонусных баллов.",
         )
         db.add(notification)
 

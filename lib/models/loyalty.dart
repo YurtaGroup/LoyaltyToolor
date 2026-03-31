@@ -1,4 +1,4 @@
-enum LoyaltyTier { bronze, silver, gold, platinum }
+enum LoyaltyTier { kulun, tai, kunan, at }
 
 class LoyaltyAccount {
   final String id;
@@ -30,7 +30,7 @@ class LoyaltyAccount {
     return LoyaltyAccount(
       id: json['id'] as String? ?? '',
       qrCode: json['qr_code'] as String? ?? '',
-      tier: _parseTier(json['tier'] as String? ?? 'bronze'),
+      tier: _parseTier(json['tier'] as String? ?? 'kulun'),
       points: (json['points'] as num?)?.toInt() ?? 0,
       totalSpent: _toDouble(json['total_spent']),
     );
@@ -38,65 +38,78 @@ class LoyaltyAccount {
 
   static LoyaltyTier _parseTier(String value) {
     switch (value.toLowerCase()) {
-      case 'silver':
-        return LoyaltyTier.silver;
-      case 'gold':
-        return LoyaltyTier.gold;
-      case 'platinum':
-        return LoyaltyTier.platinum;
-      case 'bronze':
+      case 'tai':
+        return LoyaltyTier.tai;
+      case 'kunan':
+        return LoyaltyTier.kunan;
+      case 'at':
+        return LoyaltyTier.at;
+      case 'kulun':
       default:
-        return LoyaltyTier.bronze;
+        return LoyaltyTier.kulun;
     }
   }
 
   String get tierName {
     switch (tier) {
-      case LoyaltyTier.bronze:
-        return 'Bronze';
-      case LoyaltyTier.silver:
-        return 'Silver';
-      case LoyaltyTier.gold:
-        return 'Gold';
-      case LoyaltyTier.platinum:
-        return 'Platinum';
+      case LoyaltyTier.kulun:
+        return 'Кулун';
+      case LoyaltyTier.tai:
+        return 'Тай';
+      case LoyaltyTier.kunan:
+        return 'Кунан';
+      case LoyaltyTier.at:
+        return 'Ат';
+    }
+  }
+
+  String get tierSubtitle {
+    switch (tier) {
+      case LoyaltyTier.kulun:
+        return 'Жеребёнок';
+      case LoyaltyTier.tai:
+        return 'Стригунок';
+      case LoyaltyTier.kunan:
+        return 'Молодой конь';
+      case LoyaltyTier.at:
+        return 'Скакун';
     }
   }
 
   int get cashbackPercent {
     switch (tier) {
-      case LoyaltyTier.bronze:
+      case LoyaltyTier.kulun:
         return 3;
-      case LoyaltyTier.silver:
+      case LoyaltyTier.tai:
         return 5;
-      case LoyaltyTier.gold:
+      case LoyaltyTier.kunan:
         return 8;
-      case LoyaltyTier.platinum:
+      case LoyaltyTier.at:
         return 12;
     }
   }
 
   double get nextTierThreshold {
     switch (tier) {
-      case LoyaltyTier.bronze:
+      case LoyaltyTier.kulun:
         return 50000;
-      case LoyaltyTier.silver:
+      case LoyaltyTier.tai:
         return 150000;
-      case LoyaltyTier.gold:
+      case LoyaltyTier.kunan:
         return 300000;
-      case LoyaltyTier.platinum:
+      case LoyaltyTier.at:
         return double.infinity;
     }
   }
 
   double get progressToNextTier {
-    if (tier == LoyaltyTier.platinum) return 1.0;
+    if (tier == LoyaltyTier.at) return 1.0;
     double prevThreshold = 0;
     switch (tier) {
-      case LoyaltyTier.silver:
+      case LoyaltyTier.tai:
         prevThreshold = 50000;
         break;
-      case LoyaltyTier.gold:
+      case LoyaltyTier.kunan:
         prevThreshold = 150000;
         break;
       default:

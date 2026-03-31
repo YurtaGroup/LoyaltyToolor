@@ -11,13 +11,13 @@ services:
     autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        value: postgresql+asyncpg://neondb_owner:npg_3NKgvsFrW5io@ep-blue-boat-amiwae15-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require
+        sync: false  # set in Render dashboard
       - key: JWT_SECRET
-        value: toolor-jwt-secret-2024-prod
+        sync: false
       - key: QR_SECRET
-        value: toolor-qr-secret-2024
+        sync: false
       - key: CORS_ORIGINS
-        value: '["https://toolor-admin.onrender.com","https://loyaltytoolor-xwwj.onrender.com","https://toolor-app.onrender.com","http://localhost:3000"]'
+        value: '["https://toolor-admin.onrender.com","https://loyaltytoolor-xwwj.onrender.com","http://localhost:3000"]'
       - key: ADMIN_PHONE
         value: "+996999955000"
       - key: UPLOAD_DIR
@@ -38,13 +38,3 @@ services:
         value: https://loyaltytoolor-xwwj.onrender.com
       - key: NODE_ENV
         value: production
-
-  # ── Flutter Web App (Docker + nginx) ───────────────────────────────────
-  - type: web
-    name: toolor-app
-    runtime: docker
-    dockerfilePath: ./Dockerfile.web
-    dockerContext: .
-    plan: starter
-    region: oregon
-    autoDeploy: true

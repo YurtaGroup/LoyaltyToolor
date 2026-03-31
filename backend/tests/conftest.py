@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.database import Base
 from app.main import app
 from app.dependencies import get_db
-from app.services.auth_service import create_access_token, hash_password
+from app.services.auth_service import create_access_token
 from app.models.user import Profile
 from app.models.loyalty import LoyaltyAccount
 
@@ -149,7 +149,7 @@ async def test_user(db: AsyncSession):
     user = Profile(
         id=user_id,
         phone="+996555000001",
-        password_hash=hash_password("testpass123"),
+        password_hash="",
         full_name="Test User",
         referral_code=f"TEST-{str(user_id)[:8].upper()}",
     )
@@ -158,7 +158,7 @@ async def test_user(db: AsyncSession):
     loyalty = LoyaltyAccount(
         user_id=user_id,
         qr_code=f"QR-{str(user_id)[:12].upper()}",
-        tier="bronze",
+        tier="kulun",
         points=100,
         total_spent=0,
     )
@@ -182,7 +182,7 @@ async def admin_user(db: AsyncSession):
     user = Profile(
         id=user_id,
         phone="+996555000099",
-        password_hash=hash_password("admin123"),
+        password_hash="",
         full_name="Admin User",
         is_admin=True,
         referral_code=f"ADMIN-{str(user_id)[:8].upper()}",
@@ -192,7 +192,7 @@ async def admin_user(db: AsyncSession):
     loyalty = LoyaltyAccount(
         user_id=user_id,
         qr_code=f"QRA-{str(user_id)[:12].upper()}",
-        tier="bronze",
+        tier="kulun",
         points=0,
         total_spent=0,
     )

@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import 'onboarding_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -14,6 +16,11 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _phoneCtrl = TextEditingController();
+  final _phoneMask = MaskTextInputFormatter(
+    mask: '+996 ### ### ###',
+    filter: {'#': RegExp(r'[0-9]')},
+    initialText: '+996 ',
+  );
 
   // OTP page state
   bool _otpSent = false;
@@ -25,6 +32,16 @@ class _AuthScreenState extends State<AuthScreen> {
   // Resend timer
   Timer? _resendTimer;
   int _resendSeconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill country code
+    _phoneCtrl.text = '+996 ';
+    _phoneCtrl.selection = TextSelection.fromPosition(
+      TextPosition(offset: _phoneCtrl.text.length),
+    );
+  }
 
   @override
   void dispose() {
@@ -53,17 +70,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String _formatPhone(String raw) {
-    // Normalize phone: ensure it starts with +
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return '';
-    if (!trimmed.startsWith('+')) return '+$trimmed';
-    return trimmed;
+    // Extract only digits from masked input
+    final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
+    if (digits.isEmpty) return '';
+    return '+$digits';
   }
 
   Future<void> _sendOtp() async {
     final phone = _formatPhone(_phoneCtrl.text);
-    if (phone.length < 6) {
-      _showError('Введите номер телефона');
+    // +996 + 9 digits = 13 chars total
+    if (phone.length != 13 || !phone.startsWith('+996')) {
+      _showError('Введите полный номер телефона');
       return;
     }
 
@@ -150,7 +167,16 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       _otpFocusNodes[0].requestFocus();
     } else if (auth.isLoggedIn) {
-      Navigator.of(context).pop();
+      // New user with empty profile → onboarding
+      final needsOnboarding = auth.user != null &&
+          (auth.user!.name.isEmpty || auth.user!.birthDate == null);
+      if (needsOnboarding) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        );
+      } else {
+        Navigator.of(context).pop();
+      }
     }
   }
 
@@ -246,9 +272,10 @@ class _AuthScreenState extends State<AuthScreen> {
             TextField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
+              inputFormatters: [_phoneMask],
               style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
               decoration: InputDecoration(
-                hintText: '+996 ...',
+                hintText: '+996 700 123 456',
                 hintStyle: TextStyle(color: AppColors.textTertiary),
                 prefixIcon: Icon(Icons.phone_outlined, size: 20, color: AppColors.textTertiary),
                 filled: true,

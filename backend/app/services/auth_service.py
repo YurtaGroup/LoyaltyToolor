@@ -90,7 +90,7 @@ async def create_user_with_loyalty(
     loyalty = LoyaltyAccount(
         user_id=user_id,
         qr_code=qr_code,
-        tier="bronze",
+        tier="kulun",
         points=0,
         total_spent=0,
     )

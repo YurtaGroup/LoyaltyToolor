@@ -8,36 +8,36 @@ from app.models.loyalty import LoyaltyAccount, LoyaltyTransaction
 from app.models.notification import Notification
 
 TIER_THRESHOLDS = [
-    (Decimal("300000"), "platinum"),
-    (Decimal("150000"), "gold"),
-    (Decimal("50000"), "silver"),
-    (Decimal("0"), "bronze"),
+    (Decimal("300000"), "at"),
+    (Decimal("150000"), "kunan"),
+    (Decimal("50000"), "tai"),
+    (Decimal("0"), "kulun"),
 ]
 
 TIER_CASHBACK = {
-    "bronze": Decimal("0.03"),
-    "silver": Decimal("0.05"),
-    "gold": Decimal("0.08"),
-    "platinum": Decimal("0.12"),
+    "kulun": Decimal("0.03"),
+    "tai": Decimal("0.05"),
+    "kunan": Decimal("0.08"),
+    "at": Decimal("0.12"),
 }
 
 TIER_NAMES_RU = {
-    "bronze": "Бронза",
-    "silver": "Серебро",
-    "gold": "Золото",
-    "platinum": "Платина",
+    "kulun": "Кулун",
+    "tai": "Тай",
+    "kunan": "Кунан",
+    "at": "Ат",
 }
 
-TIER_ORDER = ["bronze", "silver", "gold", "platinum"]
+TIER_ORDER = ["kulun", "tai", "kunan", "at"]
 
-BIRTHDAY_BONUS_POINTS = 1000
+BIRTHDAY_BONUS_POINTS = 500
 
 
 def calculate_tier(total_spent: Decimal) -> str:
     for threshold, tier in TIER_THRESHOLDS:
         if total_spent >= threshold:
             return tier
-    return "bronze"
+    return "kulun"
 
 
 def get_cashback_rate(tier: str) -> Decimal:
@@ -158,7 +158,7 @@ async def check_birthday_reward(db: AsyncSession, user, loyalty: LoyaltyAccount)
         type="bonus",
         amount=0,
         points_change=BIRTHDAY_BONUS_POINTS,
-        description="\U0001f382 С днём рождения! +1000 баллов",
+        description=f"\U0001f382 С днём рождения! +{BIRTHDAY_BONUS_POINTS} баллов",
     )
     db.add(txn)
 

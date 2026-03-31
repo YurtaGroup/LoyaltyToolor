@@ -17,7 +17,7 @@ class LoyaltyAccount(Base):
         UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     qr_code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    tier: Mapped[str] = mapped_column(String, default="bronze")
+    tier: Mapped[str] = mapped_column(String, default="kulun")
     points: Mapped[int] = mapped_column(Integer, default=0)
     total_spent: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = '["http://localhost:3000","http://localhost:8080"]'
     UPLOAD_DIR: str = "./uploads"
     ADMIN_PHONE: str = "+996999955000"
-    ADMIN_PASSWORD: str = "admin123"
     QR_SECRET: str = "change-me-qr-secret"
     SENTRY_DSN: str = ""
     ANTHROPIC_API_KEY: str = ""
