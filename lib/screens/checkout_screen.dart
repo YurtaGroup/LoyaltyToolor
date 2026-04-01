@@ -758,6 +758,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _orderId = data['id'] as String?;
       _orderNumber = data['order_number'] as String? ?? data['id'] as String?;
 
+      if (!mounted) return;
       final auth = context.read<AuthProvider>();
       final cashbackPct = auth.loyalty?.cashbackPercent ?? 3;
       _cashbackEarned = (_finalTotal * cashbackPct / 100).round();

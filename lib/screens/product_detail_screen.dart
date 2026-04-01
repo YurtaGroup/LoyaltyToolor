@@ -172,7 +172,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             spacing: S.x8,
                             runSpacing: S.x8,
                             children: p.sizes.map((s) {
-                              final available = !hasAvailData || p.isSizeAvailableAt(s, storeId!);
+                              final available = !hasAvailData || p.isSizeAvailableAt(s, storeId);
                               return _sizeChip(s, s == _size, available, () {
                                 if (!available) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -288,7 +288,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Builder(builder: (_) {
                 final storeId = context.read<StoreProvider>().selectedStoreId;
                 final hasAvailData = storeId != null && p.storeAvailability != null;
-                final sizeAvailable = !hasAvailData || _size.isEmpty || p.isSizeAvailableAt(_size, storeId!);
+                final sizeAvailable = !hasAvailData || _size.isEmpty || p.isSizeAvailableAt(_size, storeId);
                 final canAdd = !_added && sizeAvailable;
                 return SizedBox(
                   height: 50,

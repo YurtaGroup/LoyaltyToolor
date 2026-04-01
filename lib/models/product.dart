@@ -129,7 +129,7 @@ class Product {
 
   String get displayImageUrl {
     if (imageUrl.startsWith('https://toolorkg.com/')) {
-      return '${apiBaseUrl}/api/v1/img?url=${Uri.encodeComponent(imageUrl)}';
+      return '$apiBaseUrl/api/v1/img?url=${Uri.encodeComponent(imageUrl)}';
     }
     return imageUrl;
   }

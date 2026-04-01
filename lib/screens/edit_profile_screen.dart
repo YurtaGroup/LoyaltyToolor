@@ -53,6 +53,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       await ApiService.dio.patch('/api/v1/users/me', data: data);
 
+      if (!mounted) return;
       // Refresh profile in provider
       final auth = context.read<AuthProvider>();
       await auth.fetchProfile();

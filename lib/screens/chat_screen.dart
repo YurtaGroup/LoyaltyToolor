@@ -43,6 +43,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // If session creation fails, we'll work without persistence
     }
 
+    if (!mounted) return;
     final auth = context.read<AuthProvider>();
     final name = auth.isLoggedIn ? auth.user!.name.split(' ').first : 'друг';
     final tier = auth.loyalty?.tierName ?? 'Кулун';
@@ -347,7 +348,7 @@ class _ChatScreenState extends State<ChatScreen> {
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           itemCount: products.length,
-          separatorBuilder: (_, __) => const SizedBox(width: S.x8),
+          separatorBuilder: (_, _) => const SizedBox(width: S.x8),
           itemBuilder: (_, i) {
             final p = products[i];
             return GestureDetector(
@@ -367,7 +368,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         fit: StackFit.expand,
                         children: [
                           Image.network(p.displayImageUrl, fit: BoxFit.cover, width: double.infinity,
-                            errorBuilder: (_, __, ___) => Container(color: AppColors.surfaceOverlay)),
+                            errorBuilder: (_, _, _) => Container(color: AppColors.surfaceOverlay)),
                           if (p.isOnSale) Positioned(
                             top: 6, left: 6,
                             child: Container(
