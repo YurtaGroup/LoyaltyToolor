@@ -195,9 +195,8 @@ async def create_order_from_cart(
             if ci.product.stock is not None:
                 ci.product.stock -= ci.quantity
 
-    # Award loyalty points
-    if loyalty:
-        await award_purchase_points(db, loyalty, total, order_id=order.id)
+    # NOTE: Loyalty points are awarded on payment_confirmed, NOT here.
+    # See webhooks.py and orders.py confirm_finik_payment endpoint.
 
     # Clear cart
     for ci in cart_items:

@@ -102,6 +102,15 @@ async def update_order_status(
     if body.status == "payment_confirmed":
         order.confirmed_by = admin.id
         order.confirmed_at = now
+        # Award loyalty points (idempotent via order_id check)
+        from app.models.loyalty import LoyaltyAccount
+        from app.services.loyalty_service import award_purchase_points
+        loy_result = await db.execute(
+            select(LoyaltyAccount).where(LoyaltyAccount.user_id == order.user_id)
+        )
+        loy = loy_result.scalar_one_or_none()
+        if loy:
+            await award_purchase_points(db, loy, order.total, order_id=order.id)
     elif body.status == "ready_for_pickup":
         order.ready_for_pickup_at = now
     elif body.status == "shipped":
@@ -128,3 +137,57 @@ async def update_order_status(
     out.user_phone = order.user.phone if order.user else ""
     out.user_name = order.user.full_name if order.user else ""
     return out
+
+
+@router.post("/cleanup-abandoned", response_model=dict)
+async def cleanup_abandoned_orders(
+    older_than_hours: int = 24,
+    admin: Profile = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel pending orders older than N hours and return their inventory."""
+    from datetime import timedelta
+    from app.models.product import StoreInventory
+    from app.models.location import Location
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
+
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.status == "pending", Order.created_at < cutoff)
+    )
+    stale_orders = result.scalars().all()
+
+    released_units = 0
+    for order in stale_orders:
+        order.status = "cancelled"
+        order.admin_notes = (order.admin_notes or "") + f"\n[Auto] Cancelled: abandoned >{older_than_hours}h"
+
+        location_id = order.pickup_location_id
+        if not location_id:
+            loc_result = await db.execute(
+                select(Location.id).where(Location.type == "store", Location.is_active == True)
+                .order_by(Location.sort_order).limit(1)
+            )
+            location_id = loc_result.scalar_one_or_none()
+
+        if location_id:
+            for item in order.items:
+                inv_result = await db.execute(
+                    select(StoreInventory).where(
+                        StoreInventory.location_id == location_id,
+                        StoreInventory.product_id == item.product_id,
+                        StoreInventory.size == item.selected_size,
+                    )
+                )
+                inv = inv_result.scalar_one_or_none()
+                if inv:
+                    inv.quantity += item.quantity
+                    released_units += item.quantity
+
+    await db.commit()
+    return {
+        "cancelled_orders": len(stale_orders),
+        "inventory_returned": released_units,
+    }

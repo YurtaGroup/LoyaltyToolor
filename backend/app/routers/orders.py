@@ -190,6 +190,15 @@ async def confirm_finik_payment(
     order.payment_provider = "finik"
     order.confirmed_at = datetime.now(timezone.utc)
 
+    # Award loyalty points on confirmed payment
+    loyalty_result = await db.execute(
+        select(LoyaltyAccount).where(LoyaltyAccount.user_id == user.id)
+    )
+    loyalty = loyalty_result.scalar_one_or_none()
+    if loyalty:
+        from app.services.loyalty_service import award_purchase_points
+        await award_purchase_points(db, loyalty, order.total, order_id=order.id)
+
     notification = Notification(
         user_id=user.id,
         type="order_status",

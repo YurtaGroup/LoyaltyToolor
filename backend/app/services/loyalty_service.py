@@ -79,6 +79,17 @@ async def award_purchase_points(
     order_total: Decimal,
     order_id=None,
 ) -> int:
+    # Idempotency: if we already awarded for this order, skip
+    if order_id:
+        existing = await db.execute(
+            select(LoyaltyTransaction).where(
+                LoyaltyTransaction.order_id == order_id,
+                LoyaltyTransaction.type == "purchase",
+            )
+        )
+        if existing.scalar_one_or_none():
+            return 0
+
     rate = get_cashback_rate(loyalty.tier)
     points_earned = int(order_total * rate)
 

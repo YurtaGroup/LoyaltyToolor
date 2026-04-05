@@ -10,8 +10,10 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.dependencies import get_db
+from app.models.loyalty import LoyaltyAccount
 from app.models.notification import Notification
 from app.models.order import Order
+from app.services.loyalty_service import award_purchase_points
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,14 @@ async def finik_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     order.payment_transaction_id = transaction_id
     order.payment_provider = "finik"
     order.confirmed_at = datetime.now(timezone.utc)
+
+    # Award loyalty points on confirmed payment
+    loyalty_result = await db.execute(
+        select(LoyaltyAccount).where(LoyaltyAccount.user_id == order.user_id)
+    )
+    loyalty = loyalty_result.scalar_one_or_none()
+    if loyalty:
+        await award_purchase_points(db, loyalty, order.total, order_id=order.id)
 
     notification = Notification(
         user_id=order.user_id,
