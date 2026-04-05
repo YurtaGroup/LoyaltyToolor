@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     FINIK_WEBHOOK_SECRET: str = ""
 
     # SMS providers (set one to enable real SMS)
+    NIKITA_LOGIN: str = ""
+    NIKITA_PASSWORD: str = ""
+    NIKITA_SENDER: str = "TOOLOR"
     SMSC_LOGIN: str = ""
     SMSC_PASSWORD: str = ""
     SMSC_SENDER: str = "TOOLOR"

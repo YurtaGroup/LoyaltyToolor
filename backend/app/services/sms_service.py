@@ -60,6 +60,55 @@ class SMSCProvider(SmsProvider):
             return False
 
 
+class NikitaProvider(SmsProvider):
+    """Nikita.kg — local Kyrgyz SMS gateway (smspro.nikita.kg). XML API."""
+
+    BASE_URL = "https://smspro.nikita.kg/api/message"
+
+    def __init__(self, login: str, password: str, sender: str = "TOOLOR"):
+        self.login = login
+        self.password = password
+        self.sender = sender
+
+    async def send(self, phone: str, message: str) -> bool:
+        import uuid
+        from xml.sax.saxutils import escape
+
+        phone_clean = phone.replace("+", "").replace(" ", "").replace("-", "")
+        msg_id = uuid.uuid4().hex[:10]
+
+        xml_body = f"""<?xml version="1.0" encoding="UTF-8"?>
+<message>
+    <login>{escape(self.login)}</login>
+    <pwd>{escape(self.password)}</pwd>
+    <id>{msg_id}</id>
+    <sender>{escape(self.sender)}</sender>
+    <text>{escape(message)}</text>
+    <phones>
+        <phone>{phone_clean}</phone>
+    </phones>
+    <test>0</test>
+</message>"""
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    self.BASE_URL,
+                    content=xml_body.encode("utf-8"),
+                    headers={"Content-Type": "application/xml"},
+                )
+                text = resp.text
+                # Nikita returns <status>0</status> on success, other codes = errors
+                if "<status>0</status>" in text:
+                    logger.info(f"Nikita sent to {phone}: id={msg_id}")
+                    return True
+                logger.error(f"Nikita error response: {text[:300]}")
+                return False
+        except Exception as e:
+            logger.error(f"Nikita send failed: {e}")
+            return False
+
+
 class TwilioProvider(SmsProvider):
     """Twilio fallback (if SMSC unavailable)."""
 
@@ -97,10 +146,16 @@ def get_sms_provider() -> SmsProvider:
     if _provider is not None:
         return _provider
 
-    # SMSC.ru (Kyrgyz region, cheapest)
+    # Nikita.kg (local Kyrgyz provider — preferred)
+    if settings.NIKITA_LOGIN and settings.NIKITA_PASSWORD:
+        _provider = NikitaProvider(settings.NIKITA_LOGIN, settings.NIKITA_PASSWORD, settings.NIKITA_SENDER)
+        logger.info("SMS provider: Nikita.kg")
+        return _provider
+
+    # SMSC (international)
     if settings.SMSC_LOGIN and settings.SMSC_PASSWORD:
         _provider = SMSCProvider(settings.SMSC_LOGIN, settings.SMSC_PASSWORD, settings.SMSC_SENDER)
-        logger.info("SMS provider: SMSC.kg")
+        logger.info("SMS provider: SMSC")
         return _provider
 
     # Twilio
