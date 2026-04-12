@@ -17,7 +17,6 @@ import '../models/product.dart';
 import 'edit_profile_screen.dart';
 import 'notifications_screen.dart';
 import 'orders_screen.dart';
-import 'referral_screen.dart';
 
 /// Profile/Loyalty screen following premium brand patterns:
 /// - Stats dashboard (3 cols)
@@ -644,9 +643,6 @@ class ProfileScreen extends StatelessWidget {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen()));
           }),
           _div(),
-          _menuRow(Icons.card_giftcard_rounded, 'Пригласить друга', () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferralScreen()));
-          }),
           _div(), _menuRow(Icons.card_giftcard_rounded, 'Box подписка', () => _showBox(context)),
           _div(), _menuRow(Icons.local_offer_outlined, 'Промокоды', () {}),
           _div(), _menuRow(Icons.location_on_outlined, 'Наши точки', () => showLocationsSheet(context)),

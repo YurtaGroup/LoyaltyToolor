@@ -9,7 +9,6 @@ import '../providers/favorites_provider.dart';
 import '../providers/store_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/locations_sheet.dart';
-import '../services/analytics_service.dart';
 
 /// Product detail following Nike/SSENSE patterns:
 /// - Immersive image (50%+ of viewport)
@@ -45,7 +44,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _size = p.sizes.isNotEmpty ? p.sizes.first : '';
     }
     _color = p.colors.isNotEmpty ? p.colors.first : '';
-    Analytics.productView(p.id, p.name, p.price);
+    // Analytics removed.
   }
 
   @override

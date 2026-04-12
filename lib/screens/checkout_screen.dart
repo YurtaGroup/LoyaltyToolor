@@ -9,8 +9,6 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/locations_sheet.dart';
 import '../models/product.dart';
-import '../services/analytics_service.dart';
-
 // Conditionally import Finik SDK (only works on mobile)
 import 'package:finik_sdk/finik_sdk.dart';
 
@@ -761,12 +759,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final cashbackPct = auth.loyalty?.cashbackPercent ?? 3;
       _cashbackEarned = (_finalTotal * cashbackPct / 100).round();
 
-      Analytics.purchase(
-        _orderId ?? '',
-        _finalTotal,
-        widget.cart.itemCount,
-        'finik',
-      );
+      // Analytics.purchase removed — Mixpanel decommissioned.
 
       if (!mounted) return;
       setState(() {

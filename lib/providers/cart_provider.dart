@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../services/api_service.dart';
-import '../services/analytics_service.dart';
 
 class CartProvider extends ChangeNotifier {
   static const _key = 'cart_items';
@@ -43,7 +42,7 @@ class CartProvider extends ChangeNotifier {
     }
     notifyListeners();
     _save();
-    Analytics.addToCart(product.id, product.name, product.price);
+    // Analytics removed.
     _syncAddToBackend(product.id, size, color, 1);
   }
 

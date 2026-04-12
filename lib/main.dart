@@ -13,23 +13,16 @@ import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/catalog_screen.dart';
 import 'screens/cart_screen.dart';
+import 'screens/my_card_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/chat_screen.dart';
-import 'screens/scanner_screen.dart';
 import 'services/api_service.dart';
-import 'services/analytics_service.dart';
 
 const _sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
-const _mixpanelToken = String.fromEnvironment('MIXPANEL_TOKEN', defaultValue: '');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ApiService.init();
-  await Analytics.init(_mixpanelToken);
-
-  // Track app open
-  Analytics.appOpen();
 
   if (_sentryDsn.isNotEmpty) {
     await SentryFlutter.init(
@@ -138,12 +131,11 @@ class _MainShellState extends State<MainShell> {
       context.read<NotificationProvider>().stopPolling();
     }
 
-    final isAdmin = auth.user?.isAdmin ?? false;
     final screens = [
       const HomeScreen(),
       const CatalogScreen(),
+      const MyCardScreen(),
       const CartScreen(),
-      isAdmin ? const ScannerScreen() : const ChatScreen(),
       const ProfileScreen(),
     ];
 
@@ -155,9 +147,38 @@ class _MainShellState extends State<MainShell> {
           builder: (context, cart, _) => BottomNavigationBar(
             currentIndex: _tab,
             onTap: (i) { HapticFeedback.selectionClick(); setState(() => _tab = i); },
+            type: BottomNavigationBarType.fixed,
             items: [
-              const BottomNavigationBarItem(icon: Icon(Icons.home_outlined, size: 22), activeIcon: Icon(Icons.home_rounded, size: 22), label: 'Главная'),
-              const BottomNavigationBarItem(icon: Icon(Icons.grid_view_outlined, size: 22), activeIcon: Icon(Icons.grid_view_rounded, size: 22), label: 'Каталог'),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined, size: 22),
+                activeIcon: Icon(Icons.home_rounded, size: 22),
+                label: 'Главная',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.grid_view_outlined, size: 22),
+                activeIcon: Icon(Icons.grid_view_rounded, size: 22),
+                label: 'Каталог',
+              ),
+              // ── Center tab: "Моя карта" — bigger icon, stands out ──
+              BottomNavigationBarItem(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.qr_code_2_outlined, size: 28, color: AppColors.accent),
+                ),
+                activeIcon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.qr_code_2_rounded, size: 28, color: AppColors.accent),
+                ),
+                label: 'Карта',
+              ),
               BottomNavigationBarItem(
                 icon: Badge(
                   isLabelVisible: cart.itemCount > 0,
@@ -173,12 +194,11 @@ class _MainShellState extends State<MainShell> {
                 ),
                 label: 'Корзина',
               ),
-              BottomNavigationBarItem(
-                icon: Icon(isAdmin ? Icons.qr_code_scanner_outlined : Icons.auto_awesome_outlined, size: 22),
-                activeIcon: Icon(isAdmin ? Icons.qr_code_scanner_rounded : Icons.auto_awesome_rounded, size: 22),
-                label: isAdmin ? 'Сканер' : 'AI',
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline, size: 22),
+                activeIcon: Icon(Icons.person_rounded, size: 22),
+                label: 'Профиль',
               ),
-              const BottomNavigationBarItem(icon: Icon(Icons.person_outline, size: 22), activeIcon: Icon(Icons.person_rounded, size: 22), label: 'Профиль'),
             ],
           ),
         ),
