@@ -1,7 +1,0 @@
-# iOS
-app_identifier("com.toolor.toolorApp")
-team_id("PJPHU42VG4")
-
-# Android
-json_key_file("fastlane/play-store-key.json")
-package_name("com.toolor.toolor_app")

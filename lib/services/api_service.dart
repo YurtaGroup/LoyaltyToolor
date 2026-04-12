@@ -1,11 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Base URL configured via --dart-define, or Vercel production by default.
+/// Base URL configured via --dart-define, or cool-group production by default.
+/// The /api/v1/* compatibility layer on cool-group translates calls to the
+/// native endpoints, so NO other code changes are needed in this app.
 const _envUrl = String.fromEnvironment('API_URL', defaultValue: '');
 final String apiBaseUrl = _envUrl.isNotEmpty
     ? _envUrl
-    : 'https://loyaltytoolor-xwwj.onrender.com';
+    : 'https://coolgroup-api.onrender.com';
 
 /// Dio-based HTTP client singleton.
 /// Call [init] once in main() before runApp().

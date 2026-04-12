@@ -1,17 +1,46 @@
-# toolor_app
+# Toolor Customer App
 
-A new Flutter project.
+Flutter customer-facing app for the Toolor loyalty and retail platform.
 
-## Getting Started
+## Backend
 
-This project is a starting point for a Flutter application.
+This app connects to the **cool-group** backend (not the legacy LoyaltyToolor backend which has been decommissioned).
 
-A few resources to get you started if this is your first Flutter project:
+- Production API: `https://coolgroup-api.onrender.com`
+- Compatibility layer: `/api/v1/*` endpoints on cool-group translate to native endpoints
+- Source: [cool-group repo](https://github.com/YurtaGroup/cool-group)
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Build
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+# Development (default URL already points to cool-group prod)
+flutter run
+
+# Production APK
+flutter build apk --release \
+  --dart-define=FINIK_API_KEY=<key> \
+  --dart-define=FINIK_ACCOUNT_ID=<account_id> \
+  --dart-define=FINIK_BETA=false
+
+# Production iOS
+flutter build ipa --release \
+  --dart-define=FINIK_API_KEY=<key> \
+  --dart-define=FINIK_ACCOUNT_ID=<account_id> \
+  --dart-define=FINIK_BETA=false
+```
+
+To override the API URL (e.g., for staging):
+```bash
+flutter run --dart-define=API_URL=https://staging-api.example.com
+```
+
+## Features
+
+- SMS OTP login (Nikita.kg)
+- Product catalog with categories
+- Shopping cart + checkout
+- Finik payment (QR / APP / VISA)
+- Loyalty tiers (Kulun / Tai / Kunan / At) with cashback
+- QR code for in-store loyalty scanning
+- Order history + cancellation
+- Push notifications (Firebase)

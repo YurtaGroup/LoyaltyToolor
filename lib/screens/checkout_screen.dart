@@ -806,7 +806,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         nameEn: 'TOOLOR Order ${_orderNumber ?? ""}',
         amount: FixedAmount(_finalTotal),
         requestId: requestId,
-        callbackUrl: '$apiBaseUrl/api/v1/webhooks/finik',
+        callbackUrl: '$apiBaseUrl/api/webhooks/finik',
         requiredFields: [
           if (_orderId != null)
             RequiredField(
