@@ -79,20 +79,26 @@ class ApiService {
       }
     }
     if (err.response?.statusCode == 401) {
-      final refreshed = await _tryRefreshToken();
-      if (refreshed) {
-        // Retry the original request with the new token.
-        final opts = err.requestOptions;
-        final newToken = await getAccessToken();
-        opts.headers['Authorization'] = 'Bearer $newToken';
-        try {
-          final response = await _dio.fetch(opts);
-          return handler.resolve(response);
-        } on DioException catch (e) {
-          return handler.next(e);
+      final path = err.requestOptions.path;
+      final isAuthEndpoint = path.contains('/auth/');
+      final alreadyRetried = err.requestOptions.extra['_retried_401'] == true;
+
+      if (!isAuthEndpoint && !alreadyRetried) {
+        final refreshed = await _tryRefreshToken();
+        if (refreshed) {
+          final opts = err.requestOptions;
+          opts.extra['_retried_401'] = true;
+          final newToken = await getAccessToken();
+          opts.headers['Authorization'] = 'Bearer $newToken';
+          try {
+            final response = await _dio.fetch(opts);
+            return handler.resolve(response);
+          } on DioException catch (e) {
+            return handler.next(e);
+          }
+        } else {
+          await clearTokens();
         }
-      } else {
-        await clearTokens();
       }
     }
     handler.next(err);
