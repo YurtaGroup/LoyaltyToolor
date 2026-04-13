@@ -29,13 +29,13 @@ class NotificationProvider extends ChangeNotifier {
     _pollTimer = null;
   }
 
-  /// GET /api/v1/notifications
+  /// GET /api/me/notifications
   Future<void> fetchNotifications() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final response = await ApiService.dio.get('/api/v1/notifications');
+      final response = await ApiService.dio.get('/api/me/notifications');
       final data = response.data;
       final List<dynamic> items =
           data is List ? data : (data['items'] as List? ?? []);
@@ -51,14 +51,14 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  /// GET /api/v1/notifications/unread-count
+  /// GET /api/me/notifications/unread-count
   Future<void> fetchUnreadCount() async {
     try {
       final loggedIn = await ApiService.isLoggedIn();
       if (!loggedIn) return;
 
       final response =
-          await ApiService.dio.get('/api/v1/notifications/unread-count');
+          await ApiService.dio.get('/api/me/notifications/unread-count');
       final data = response.data as Map<String, dynamic>;
       _unreadCount = (data['count'] as num?)?.toInt() ?? 0;
       notifyListeners();
@@ -67,7 +67,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  /// PATCH /api/v1/notifications/{id}/read
+  /// PATCH /api/me/notifications/{id}/read
   Future<void> markAsRead(String id) async {
     // Optimistic update
     final idx = _notifications.indexWhere((n) => n.id == id);
@@ -78,7 +78,7 @@ class NotificationProvider extends ChangeNotifier {
     }
 
     try {
-      await ApiService.dio.patch('/api/v1/notifications/$id/read');
+      await ApiService.dio.patch('/api/me/notifications/$id/read');
     } catch (e) {
       debugPrint('[NotificationProvider] markAsRead error: $e');
       // Revert on failure
