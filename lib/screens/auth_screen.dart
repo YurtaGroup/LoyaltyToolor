@@ -242,7 +242,10 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
           MaterialPageRoute(builder: (_) => const OnboardingScreen()),
         );
       } else {
-        Navigator.of(context).pop();
+        // Return `true` so gated callers (QR tab, checkout, favorite)
+        // can tell the user successfully logged in and resume their
+        // pending action.
+        Navigator.of(context).pop(true);
       }
     }
   }

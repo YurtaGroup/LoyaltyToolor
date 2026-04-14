@@ -14,6 +14,7 @@ import 'screens/home_screen.dart';
 import 'screens/catalog_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/auth_screen.dart';
 import 'services/api_service.dart';
 
 const _sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
@@ -158,7 +159,21 @@ class _MainShellState extends State<MainShell> {
         child: Consumer<CartProvider>(
           builder: (context, cart, _) => BottomNavigationBar(
             currentIndex: _tab,
-            onTap: (i) { HapticFeedback.selectionClick(); setState(() => _tab = i); },
+            onTap: (i) async {
+              HapticFeedback.selectionClick();
+              // QR tab requires a real customer account — push AuthScreen
+              // and only switch to the tab after a successful login.
+              if (i == 2 && !auth.isLoggedIn) {
+                final ok = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+                if (ok == true && mounted) {
+                  setState(() => _tab = 2);
+                }
+                return;
+              }
+              setState(() => _tab = i);
+            },
             type: BottomNavigationBarType.fixed,
             items: [
               const BottomNavigationBarItem(
