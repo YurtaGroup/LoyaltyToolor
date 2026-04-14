@@ -6,6 +6,7 @@ import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import 'checkout_screen.dart';
+import 'auth_screen.dart';
 
 /// Cart following Shopify/Apple Store pattern:
 /// - Swipe-to-delete with red background
@@ -212,8 +213,19 @@ class CartScreen extends StatelessWidget {
     );
   }
 
-  void _checkout(BuildContext context, CartProvider cart) {
+  Future<void> _checkout(BuildContext context, CartProvider cart) async {
     HapticFeedback.mediumImpact();
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) {
+      // Guest flow: push auth, and only continue to checkout on
+      // successful login. Cart state is already persisted locally,
+      // so nothing is lost if the user backs out.
+      final ok = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
+      if (ok != true || !context.mounted) return;
+    }
+    if (!context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => CheckoutScreen(cart: cart)),
     );

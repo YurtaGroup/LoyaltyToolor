@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
+import '../providers/auth_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/store_provider.dart';
+import '../screens/auth_screen.dart';
 import '../theme/app_theme.dart';
 
 /// E-commerce product card following Shopify/SSENSE patterns:
@@ -134,6 +136,15 @@ class ProductCard extends StatelessWidget {
           return GestureDetector(
             onTap: () {
               HapticFeedback.selectionClick();
+              final auth = context.read<AuthProvider>();
+              if (!auth.isLoggedIn) {
+                // Favorites live on the server. Push auth and bail;
+                // the user can tap the heart again after logging in.
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AuthScreen()),
+                );
+                return;
+              }
               fav.toggleFavorite(product);
             },
             child: AnimatedContainer(

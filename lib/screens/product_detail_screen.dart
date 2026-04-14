@@ -4,11 +4,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/product.dart';
+import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/store_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/locations_sheet.dart';
+import 'auth_screen.dart';
 
 /// Product detail following Nike/SSENSE patterns:
 /// - Immersive image (50%+ of viewport)
@@ -69,11 +71,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 actions: [
                   _pill(Icons.share_rounded, () => _shareProduct(p)),
                   Consumer<FavoritesProvider>(
-                    builder: (_, fav, _) {
+                    builder: (innerContext, fav, _) {
                       final on = fav.isFavorite(p.id);
                       return _pill(
                         on ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        () { HapticFeedback.selectionClick(); fav.toggleFavorite(p); },
+                        () {
+                          HapticFeedback.selectionClick();
+                          final auth = innerContext.read<AuthProvider>();
+                          if (!auth.isLoggedIn) {
+                            Navigator.of(innerContext).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AuthScreen(),
+                              ),
+                            );
+                            return;
+                          }
+                          fav.toggleFavorite(p);
+                        },
                         color: on ? AppColors.sale : Colors.white,
                       );
                     },
