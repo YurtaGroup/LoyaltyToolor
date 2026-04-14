@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
+import '../services/analytics_service.dart';
 import '../services/api_service.dart';
 
 class CartProvider extends ChangeNotifier {
@@ -42,7 +43,11 @@ class CartProvider extends ChangeNotifier {
     }
     notifyListeners();
     _save();
-    // Analytics removed.
+    AnalyticsService.track('add_to_cart', payload: {
+      'product_id': product.id,
+      'size': size,
+      'color': color,
+    });
     _syncAddToBackend(product.id, size, color, 1);
   }
 

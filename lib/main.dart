@@ -15,6 +15,7 @@ import 'screens/catalog_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/auth_screen.dart';
+import 'services/analytics_service.dart';
 import 'services/api_service.dart';
 
 const _sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
@@ -164,6 +165,7 @@ class _MainShellState extends State<MainShell> {
               // QR tab requires a real customer account — push AuthScreen
               // and only switch to the tab after a successful login.
               if (i == 2 && !auth.isLoggedIn) {
+                AnalyticsService.track('open_qr_gate', payload: {});
                 final ok = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(builder: (_) => const AuthScreen()),
                 );

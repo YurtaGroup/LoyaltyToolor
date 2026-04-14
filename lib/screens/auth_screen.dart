@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/analytics_service.dart';
 import '../theme/app_theme.dart';
 import 'onboarding_screen.dart';
 
@@ -142,6 +143,8 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
       _showError('Введите полный номер телефона');
       return;
     }
+
+    AnalyticsService.track('register_started', payload: {});
 
     final auth = context.read<AuthProvider>();
     final otpCode = await auth.sendOtp(phone);

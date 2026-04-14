@@ -9,6 +9,7 @@ import '../providers/cart_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/store_provider.dart';
 import '../theme/app_theme.dart';
+import '../services/analytics_service.dart';
 import '../widgets/locations_sheet.dart';
 import 'auth_screen.dart';
 
@@ -46,7 +47,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       _size = p.sizes.isNotEmpty ? p.sizes.first : '';
     }
     _color = p.colors.isNotEmpty ? p.colors.first : '';
-    // Analytics removed.
+    AnalyticsService.track('view_product', payload: {
+      'product_id': p.id,
+      'category': p.category,
+    });
   }
 
   @override
