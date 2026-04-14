@@ -181,13 +181,22 @@ class ApiService {
   }
 
   /// POST /api/v1/auth/verify-otp — verify OTP and get tokens.
+  ///
+  /// Also forwards the current guest_sessions.id (decoded from the
+  /// local guest JWT) so the server-side merge service can rewrite
+  /// pre-registration events onto the new customer.
   static Future<Map<String, dynamic>> verifyOtp(
     String phone,
     String otpCode,
   ) async {
+    final guestId = await getGuestSubject();
     final response = await _dio.post(
       '/api/v1/auth/verify-otp',
-      data: {'phone': phone, 'otp_code': otpCode},
+      data: {
+        'phone': phone,
+        'otp_code': otpCode,
+        if (guestId != null) 'guest_id': guestId,
+      },
     );
 
     final data = response.data as Map<String, dynamic>;

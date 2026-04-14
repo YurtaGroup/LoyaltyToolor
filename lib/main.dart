@@ -102,6 +102,7 @@ class _MainShellState extends State<MainShell> {
   bool _sessionChecked = false;
   bool _storeInitialized = false;
   bool _favoritesSynced = false;
+  bool _cartSynced = false;
 
   @override
   Widget build(BuildContext context) {
@@ -143,6 +144,22 @@ class _MainShellState extends State<MainShell> {
     } else if (!auth.isLoggedIn && _favoritesSynced) {
       _favoritesSynced = false;
       context.read<FavoritesProvider>().clearOnLogout();
+    }
+
+    // Push any guest-side cart items to the server on login so the
+    // checkout that triggered the login flow can resume with a
+    // server-synced cart.
+    if (auth.isLoggedIn && !_cartSynced) {
+      _cartSynced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          await context.read<CartProvider>().syncToBackend();
+        } catch (e) {
+          debugPrint('[MainShell] cart syncToBackend failed: $e');
+        }
+      });
+    } else if (!auth.isLoggedIn && _cartSynced) {
+      _cartSynced = false;
     }
 
     final screens = [
