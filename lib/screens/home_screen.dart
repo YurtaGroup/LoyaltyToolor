@@ -5,12 +5,13 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/store_provider.dart';
+import '../models/banner.dart';
 import '../models/loyalty.dart';
 import '../models/product.dart';
 import '../screens/product_detail_screen.dart';
 import '../services/api_service.dart';
-import '../screens/auth_screen.dart';
 import '../widgets/product_card.dart';
+import '../widgets/guest_cta_card.dart';
 
 /// Home screen following editorial e-commerce patterns:
 /// - Loyalty card as hero (key differentiator)
@@ -29,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   List<Product> _saleProducts = [];
   List<Product> _newProducts = [];
+  List<AppBanner> _banners = [];
   bool _isLoading = true;
   bool _loadError = false;
   bool _loyaltyRetried = false;
@@ -38,6 +40,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.initState();
     _entryCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..forward();
     _fetchProducts();
+    _fetchBanners();
+  }
+
+  Future<void> _fetchBanners() async {
+    try {
+      final response = await ApiService.dio.get('/api/v1/banners');
+      final items = (response.data as List)
+          .map((json) => AppBanner.fromJson(
+                json as Map<String, dynamic>,
+                fallbackBackground: AppColors.accent,
+                fallbackText: Colors.white,
+              ))
+          .where((b) => b.title.isNotEmpty)
+          .toList();
+      if (!mounted) return;
+      setState(() => _banners = items);
+    } catch (e) {
+      debugPrint('[HomeScreen] Failed to fetch banners: $e');
+    }
   }
 
   Future<void> _fetchProducts() async {
@@ -81,91 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        // Show loading splash while restoring session
-        if (auth.isLoading && !auth.isLoggedIn) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset('assets/images/toolor_logo.png', width: 160),
-                const SizedBox(height: 24),
-                const CircularProgressIndicator(),
-              ],
-            ),
-          );
-        }
-        if (!auth.isLoggedIn) return _welcome(auth);
-        return _home(context, auth);
-      },
-    );
-  }
-
-  // ─── Welcome / Login ─────────────────────────────────────────────
-  Widget _welcome(AuthProvider auth) {
-    final fade = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
-    final slide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
-
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(0, -0.3),
-          radius: 1.2,
-          colors: [
-            isDark ? const Color(0xFF0F1620) : const Color(0xFFEAF1F8),
-            AppColors.background,
-          ],
-        ),
-      ),
-      child: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: fade,
-            child: SlideTransition(
-              position: slide,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: S.x40),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset('assets/images/toolor_logo.png', width: 200),
-                    const SizedBox(height: S.x8),
-                    Text(
-                      'LOYALTY  &  STORE',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, letterSpacing: 6, color: AppColors.textTertiary),
-                    ),
-                    const SizedBox(height: S.x64),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          HapticFeedback.mediumImpact();
-                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuthScreen()));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0033A0),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1),
-                        ),
-                        child: const Text('ВОЙТИ'),
-                      ),
-                    ),
-                    const SizedBox(height: S.x12),
-                    TextButton(
-                      onPressed: () { HapticFeedback.lightImpact(); Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen())); },
-                      child: Text('Создать аккаунт', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+      builder: (context, auth, _) => _home(context, auth),
     );
   }
 
@@ -177,8 +114,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       return const Center(child: CircularProgressIndicator());
     }
 
-    // Loyalty may be null if fetch failed during onboarding — retry once
-    if (loyalty == null) {
+    // Loyalty may be null during a logged-in retry window if the fetch
+    // failed right after onboarding. Retry once so the card renders.
+    // Guests never have a loyalty account — skip this branch entirely.
+    if (auth.isLoggedIn && loyalty == null) {
       if (!_loyaltyRetried) {
         _loyaltyRetried = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -230,11 +169,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           // Greeting — minimal, left-aligned
           SliverToBoxAdapter(child: _header(auth, loyalty)),
 
-          // Loyalty card
-          SliverToBoxAdapter(child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: S.x16),
-            child: _loyaltyCard(context, loyalty),
-          )),
+          // Loyalty card (logged-in) or guest CTA (anonymous)
+          SliverToBoxAdapter(
+            child: auth.isLoggedIn && loyalty != null
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: S.x16),
+                    child: _loyaltyCard(context, loyalty),
+                  )
+                : const GuestCtaCard(),
+          ),
 
           // Editorial banners
           SliverToBoxAdapter(child: Padding(
@@ -274,7 +217,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _header(AuthProvider auth, LoyaltyAccount loyalty) {
+  Widget _header(AuthProvider auth, LoyaltyAccount? loyalty) {
+    final firstName = (auth.user?.name ?? '').isNotEmpty
+        ? auth.user!.name.split(' ').first
+        : null;
+    final greeting = firstName != null ? 'Привет, $firstName' : 'Добро пожаловать';
     return Padding(
       padding: const EdgeInsets.fromLTRB(S.x16, S.x16, S.x16, S.x16),
       child: Row(
@@ -284,14 +231,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Привет, ${(auth.user?.name ?? '').isNotEmpty ? auth.user!.name.split(' ').first : ''}',
+                  greeting,
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
-                const SizedBox(height: S.x2),
-                Text(
-                  '${loyalty.tierName} \u2022 ${loyalty.cashbackPercent}% cashback',
-                  style: TextStyle(fontSize: 12, color: _tierColor(loyalty.tier), fontWeight: FontWeight.w500, letterSpacing: 0.3),
-                ),
+                if (loyalty != null) ...[
+                  const SizedBox(height: S.x2),
+                  Text(
+                    '${loyalty.tierName} \u2022 ${loyalty.cashbackPercent}% cashback',
+                    style: TextStyle(fontSize: 12, color: _tierColor(loyalty.tier), fontWeight: FontWeight.w500, letterSpacing: 0.3),
+                  ),
+                ],
               ],
             ),
           ),
@@ -390,231 +339,96 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  void _showQR(BuildContext context, LoyaltyAccount loyalty) {
-    final tierIndex = LoyaltyTier.values.indexOf(loyalty.tier);
-    final tiers = [
-      ('Кулун', '3% кэшбэк', 'Пройти регистрацию', LoyaltyTier.kulun, AppColors.bronze),
-      ('Тай', '5% кэшбэк', 'от 50 000 сом', LoyaltyTier.tai, AppColors.silver),
-      ('Кунан', '8% кэшбэк', 'от 150 000 сом', LoyaltyTier.kunan, AppColors.goldTier),
-      ('Ат', '12% кэшбэк', 'от 300 000 сом', LoyaltyTier.at, AppColors.platinum),
-    ];
+  void _showQR(BuildContext context, LoyaltyAccount loyalty) =>
+      showLoyaltyQrSheet(context, loyalty);
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Consumer<AuthProvider>(
-        builder: (ctx, auth, _) {
-          final qrData = auth.qrToken ?? loyalty.qrCode;
-          final tc = _tierColor(loyalty.tier);
-          final remaining = loyalty.tier != LoyaltyTier.at
-              ? (loyalty.nextTierThreshold - loyalty.totalSpent).toStringAsFixed(0)
-              : '';
-
-          return Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle bar
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
-                ),
-
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+  // ─── Editorial Banners ───────────────────────────────────────────
+  Widget _editorialBanners() {
+    if (_banners.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 140,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: S.x16),
+        itemCount: _banners.length,
+        separatorBuilder: (_, _) => const SizedBox(width: S.x12),
+        itemBuilder: (_, i) {
+          final b = _banners[i];
+          // Match the editorial look of the old hardcoded banners: a soft
+          // gradient wash over the card, with the subtitle/arrow in the
+          // brand-supplied color. When the banner has a background image
+          // we overlay the gradient on top so the photo still reads.
+          final titleColor = b.imageUrl != null ? b.textColor : AppColors.textPrimary;
+          final subtitleColor = b.imageUrl != null ? b.textColor : b.backgroundColor;
+          return GestureDetector(
+            onTap: () => _onBannerTap(b),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(S.x20),
+              decoration: BoxDecoration(
+                gradient: b.imageUrl == null
+                    ? LinearGradient(
+                        colors: [
+                          b.backgroundColor.withValues(alpha: 0.22),
+                          b.backgroundColor.withValues(alpha: 0.04),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: b.imageUrl != null ? b.backgroundColor : null,
+                image: b.imageUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(b.imageUrl!),
+                        fit: BoxFit.cover,
+                        colorFilter: ColorFilter.mode(
+                          b.backgroundColor.withValues(alpha: 0.55),
+                          BlendMode.darken,
+                        ),
+                      )
+                    : null,
+                borderRadius: BorderRadius.circular(R.lg),
+                border: Border.all(color: b.backgroundColor.withValues(alpha: 0.1)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    b.title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: titleColor,
+                      height: 1.25,
+                    ),
+                  ),
+                  if (b.subtitle != null && b.subtitle!.isNotEmpty)
+                    Row(
                       children: [
-                        // ── Current tier header ──
-                        Text(loyalty.tierName, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-                        const SizedBox(height: 8),
-                        if (loyalty.tier != LoyaltyTier.at)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                            child: Text(
-                              '$remaining сом до ${_nextTier(loyalty.tier)}',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tc),
-                            ),
-                          )
-                        else
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                            child: Text('Максимальный уровень', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tc)),
-                          ),
-
-                        const SizedBox(height: 20),
-                        Divider(color: AppColors.divider),
-                        const SizedBox(height: 16),
-
-                        // ── QR Code ──
-                        Center(
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text('ПОКАЖИТЕ НА КАССЕ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 2, color: AppColors.textSecondary)),
-                                  const SizedBox(width: S.x8),
-                                  _QrPulseIndicator(),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.lg)),
-                                child: auth.qrToken != null
-                                    ? QrImageView(data: qrData, version: QrVersions.auto, size: 180, backgroundColor: Colors.white)
-                                    : const SizedBox(width: 180, height: 180, child: Center(child: CircularProgressIndicator())),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-                        Divider(color: AppColors.divider),
-                        const SizedBox(height: 16),
-
-                        // ── Description ──
-                        Text(
-                          'Каждый наш покупатель автоматически становится участником бонусной программы. Совершайте покупки и получайте кэшбэк баллами!',
-                          style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ── Tier roadmap ──
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: Column(
-                            children: List.generate(tiers.length, (i) {
-                              final (name, cashback, condition, tier, color) = tiers[i];
-                              final isActive = i <= tierIndex;
-                              final isCurrent = i == tierIndex;
-                              final isLast = i == tiers.length - 1;
-
-                              return Column(
-                                children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // ── Timeline column ──
-                                      SizedBox(
-                                        width: 32,
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              width: 28, height: 28,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: isActive ? color : AppColors.surfaceBright,
-                                                border: isCurrent ? Border.all(color: color, width: 2.5) : null,
-                                              ),
-                                              child: Center(
-                                                child: Text(
-                                                  '${i + 1}',
-                                                  style: TextStyle(
-                                                    fontSize: 13, fontWeight: FontWeight.w700,
-                                                    color: isActive ? Colors.white : AppColors.textTertiary,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 14),
-
-                                      // ── Tier info ──
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Text(name, style: TextStyle(
-                                                  fontSize: 16, fontWeight: FontWeight.w700,
-                                                  color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
-                                                )),
-                                                const SizedBox(width: 8),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: isActive ? color.withValues(alpha: 0.15) : AppColors.surfaceBright,
-                                                    borderRadius: BorderRadius.circular(12),
-                                                  ),
-                                                  child: Text(cashback, style: TextStyle(
-                                                    fontSize: 12, fontWeight: FontWeight.w600,
-                                                    color: isActive ? color : AppColors.textTertiary,
-                                                  )),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(condition, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  // ── Connecting line ──
-                                  if (!isLast)
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 13),
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Container(
-                                          width: 2, height: 32,
-                                          color: i < tierIndex ? color : AppColors.surfaceBright,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              );
-                            }),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // ── Rules link ──
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const _LoyaltyRulesScreen()));
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              border: Border(top: BorderSide(color: AppColors.divider)),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Правила программы лояльности', style: TextStyle(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
-                                Icon(Icons.arrow_forward, size: 18, color: AppColors.textTertiary),
-                              ],
+                        Expanded(
+                          child: Text(
+                            b.subtitle!,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: subtitleColor,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 16,
+                          color: subtitleColor.withValues(alpha: 0.6),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -622,52 +436,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  // ─── Editorial Banners ───────────────────────────────────────────
-  Widget _editorialBanners() {
-    final banners = [
-      _BannerData('ВЕСЕННЯЯ\nКОЛЛЕКЦИЯ', 'Новые поступления 2026', AppColors.accent),
-      _BannerData('TOOLOR BOX', 'Подписка от 4 990 сом', AppColors.gold),
-      _BannerData('ПРИМЕРКА\nДОМА', 'Закажи 2 размера бесплатно', Colors.blueAccent),
-    ];
-    return SizedBox(
-      height: 140,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: S.x16),
-        itemCount: banners.length,
-        separatorBuilder: (_, _) => const SizedBox(width: S.x12),
-        itemBuilder: (_, i) {
-          final b = banners[i];
-          return Container(
-            width: 220,
-            padding: const EdgeInsets.all(S.x20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [b.color.withValues(alpha: 0.22), b.color.withValues(alpha: 0.04)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(R.lg),
-              border: Border.all(color: b.color.withValues(alpha: 0.1)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(b.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.25)),
-                Row(
-                  children: [
-                    Expanded(child: Text(b.subtitle, style: TextStyle(fontSize: 11, color: b.color, fontWeight: FontWeight.w500))),
-                    Icon(Icons.arrow_forward_rounded, size: 16, color: b.color.withValues(alpha: 0.6)),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
+  void _onBannerTap(AppBanner b) {
+    // Deep links for banners are the admin's hook for driving traffic to
+    // specific screens. Only URL links are supported for now — category
+    // and product navigation need their own screen arguments and will be
+    // wired up when the admin actually starts creating those banner types.
+    HapticFeedback.selectionClick();
+    if (b.linkType == 'url' && b.linkValue != null && b.linkValue!.isNotEmpty) {
+      // launch_url intentionally not imported yet — defer to the default
+      // handler once it is. For now the tap is a silent haptic.
+    }
   }
 
   // ─── Section Title ───────────────────────────────────────────────
@@ -724,12 +502,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void _open(BuildContext context, Product p, String tag) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: p, heroTag: tag)));
   }
-}
-
-class _BannerData {
-  final String title, subtitle;
-  final Color color;
-  const _BannerData(this.title, this.subtitle, this.color);
 }
 
 /// A small pulsing dot that indicates the QR code is live/rotating.
@@ -886,6 +658,299 @@ class _LoyaltyRulesScreen extends StatelessWidget {
           Text(cashback, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
         ],
       ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Loyalty QR bottom sheet — shared by the home hero card and the
+// central nav tab. Renders the customer's tier, rotating QR, and
+// tier roadmap.
+// ═══════════════════════════════════════════════════════════════════
+
+Color _loyaltyTierColor(LoyaltyTier t) => switch (t) {
+  LoyaltyTier.kulun => AppColors.bronze,
+  LoyaltyTier.tai => AppColors.silver,
+  LoyaltyTier.kunan => AppColors.goldTier,
+  LoyaltyTier.at => AppColors.platinum,
+};
+
+String _loyaltyNextTierName(LoyaltyTier t) => switch (t) {
+  LoyaltyTier.kulun => 'Тай',
+  LoyaltyTier.tai => 'Кунан',
+  LoyaltyTier.kunan => 'Ат',
+  LoyaltyTier.at => '',
+};
+
+class _LoyaltyQrBody extends StatelessWidget {
+  final LoyaltyAccount loyalty;
+  final VoidCallback onRulesTap;
+
+  const _LoyaltyQrBody({required this.loyalty, required this.onRulesTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final tierIndex = LoyaltyTier.values.indexOf(loyalty.tier);
+    final tiers = [
+      ('Кулун', '3% кэшбэк', 'Пройти регистрацию', LoyaltyTier.kulun, AppColors.bronze),
+      ('Тай', '5% кэшбэк', 'от 50 000 сом', LoyaltyTier.tai, AppColors.silver),
+      ('Кунан', '8% кэшбэк', 'от 150 000 сом', LoyaltyTier.kunan, AppColors.goldTier),
+      ('Ат', '12% кэшбэк', 'от 300 000 сом', LoyaltyTier.at, AppColors.platinum),
+    ];
+
+    return Consumer<AuthProvider>(
+      builder: (ctx, auth, _) {
+        final qrData = auth.qrToken ?? loyalty.qrCode;
+        final tc = _loyaltyTierColor(loyalty.tier);
+        final remaining = loyalty.tier != LoyaltyTier.at
+            ? (loyalty.nextTierThreshold - loyalty.totalSpent).toStringAsFixed(0)
+            : '';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(loyalty.tierName, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            if (loyalty.tier != LoyaltyTier.at)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                child: Text(
+                  '$remaining сом до ${_loyaltyNextTierName(loyalty.tier)}',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tc),
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(color: tc.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                child: Text('Максимальный уровень', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tc)),
+              ),
+            const SizedBox(height: 20),
+            Divider(color: AppColors.divider),
+            const SizedBox(height: 16),
+            Center(
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('ПОКАЖИТЕ НА КАССЕ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 2, color: AppColors.textSecondary)),
+                      const SizedBox(width: S.x8),
+                      _QrPulseIndicator(),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.lg)),
+                    child: auth.qrToken != null
+                        ? QrImageView(data: qrData, version: QrVersions.auto, size: 220, backgroundColor: Colors.white)
+                        : const SizedBox(width: 220, height: 220, child: Center(child: CircularProgressIndicator())),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Divider(color: AppColors.divider),
+            const SizedBox(height: 16),
+            Text(
+              'Каждый наш покупатель автоматически становится участником бонусной программы. Совершайте покупки и получайте кэшбэк баллами!',
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceElevated,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.divider),
+              ),
+              child: Column(
+                children: List.generate(tiers.length, (i) {
+                  final (name, cashback, condition, _, color) = tiers[i];
+                  final isActive = i <= tierIndex;
+                  final isCurrent = i == tierIndex;
+                  final isLast = i == tiers.length - 1;
+                  return Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 28, height: 28,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isActive ? color : AppColors.surfaceBright,
+                                    border: isCurrent ? Border.all(color: color, width: 2.5) : null,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: TextStyle(
+                                        fontSize: 13, fontWeight: FontWeight.w700,
+                                        color: isActive ? Colors.white : AppColors.textTertiary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(name, style: TextStyle(
+                                      fontSize: 16, fontWeight: FontWeight.w700,
+                                      color: isActive ? AppColors.textPrimary : AppColors.textTertiary,
+                                    )),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: isActive ? color.withValues(alpha: 0.15) : AppColors.surfaceBright,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(cashback, style: TextStyle(
+                                        fontSize: 12, fontWeight: FontWeight.w600,
+                                        color: isActive ? color : AppColors.textTertiary,
+                                      )),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(condition, style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!isLast)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 13),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              width: 2, height: 32,
+                              color: i < tierIndex ? color : AppColors.surfaceBright,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: onRulesTap,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.divider)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Правила программы лояльности', style: TextStyle(fontSize: 15, color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+                    Icon(Icons.arrow_forward, size: 18, color: AppColors.textTertiary),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+void showLoyaltyQrSheet(BuildContext context, LoyaltyAccount loyalty) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40, height: 4,
+            decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              child: _LoyaltyQrBody(
+                loyalty: loyalty,
+                onRulesTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const _LoyaltyRulesScreen()),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class LoyaltyQrScreen extends StatelessWidget {
+  const LoyaltyQrScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final loyalty = auth.loyalty;
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: loyalty == null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.qr_code_2_rounded, size: 64, color: AppColors.textSecondary),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Войдите чтобы получить карту',
+                        style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                )
+              : SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                    child: _LoyaltyQrBody(
+                      loyalty: loyalty,
+                      onRulesTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const _LoyaltyRulesScreen()),
+                      ),
+                    ),
+                  ),
+                ),
+        );
+      },
     );
   }
 }
