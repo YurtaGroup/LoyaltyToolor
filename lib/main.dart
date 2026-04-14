@@ -13,7 +13,6 @@ import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/catalog_screen.dart';
 import 'screens/cart_screen.dart';
-import 'screens/my_card_screen.dart';
 import 'screens/profile_screen.dart';
 import 'services/api_service.dart';
 
@@ -23,6 +22,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await ApiService.init();
+  await ApiService.bootstrapGuest();
 
   if (_sentryDsn.isNotEmpty) {
     await SentryFlutter.init(
@@ -99,6 +99,7 @@ class _MainShellState extends State<MainShell> {
   bool _notificationsStarted = false;
   bool _sessionChecked = false;
   bool _storeInitialized = false;
+  bool _favoritesSynced = false;
 
   @override
   Widget build(BuildContext context) {
@@ -131,10 +132,21 @@ class _MainShellState extends State<MainShell> {
       context.read<NotificationProvider>().stopPolling();
     }
 
+    // Sync favorites from the server on login, clear cache on logout.
+    if (auth.isLoggedIn && !_favoritesSynced) {
+      _favoritesSynced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<FavoritesProvider>().syncFromServer();
+      });
+    } else if (!auth.isLoggedIn && _favoritesSynced) {
+      _favoritesSynced = false;
+      context.read<FavoritesProvider>().clearOnLogout();
+    }
+
     final screens = [
       const HomeScreen(),
       const CatalogScreen(),
-      const MyCardScreen(),
+      const LoyaltyQrScreen(),
       const CartScreen(),
       const ProfileScreen(),
     ];
@@ -161,23 +173,29 @@ class _MainShellState extends State<MainShell> {
               ),
               // ── Center tab: "Моя карта" — bigger icon, stands out ──
               BottomNavigationBarItem(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withOpacity(0.1),
-                    shape: BoxShape.circle,
+                icon: Transform.translate(
+                  offset: const Offset(0, 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.qr_code_2_outlined, size: 28, color: AppColors.accent),
                   ),
-                  child: Icon(Icons.qr_code_2_outlined, size: 28, color: AppColors.accent),
                 ),
-                activeIcon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withOpacity(0.15),
-                    shape: BoxShape.circle,
+                activeIcon: Transform.translate(
+                  offset: const Offset(0, 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.qr_code_2_rounded, size: 28, color: AppColors.accent),
                   ),
-                  child: Icon(Icons.qr_code_2_rounded, size: 28, color: AppColors.accent),
                 ),
-                label: 'Карта',
+                label: '',
               ),
               BottomNavigationBarItem(
                 icon: Badge(

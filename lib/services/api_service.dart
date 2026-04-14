@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'device_id_service.dart';
 
 /// Base URL configured via --dart-define, or cool-group production by default.
 /// The /api/v1/* compatibility layer on cool-group translates calls to the
@@ -15,10 +19,13 @@ class ApiService {
   ApiService._();
 
   static late Dio _dio;
-  static const _storage = FlutterSecureStorage();
 
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
+  static const _guestTokenKey = 'guest_access_token';
+
+  static Future<SharedPreferences> get _prefs async =>
+      SharedPreferences.getInstance();
 
   /// Expose the Dio instance for direct use in repositories / providers.
   static Dio get dio => _dio;
@@ -53,9 +60,17 @@ class ApiService {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await getAccessToken();
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
+    // Customer token wins when present; otherwise fall back to the
+    // guest token so anonymous users can still reach public endpoints
+    // and /api/me/events. Never attach both.
+    final customer = await getAccessToken();
+    if (customer != null && customer.isNotEmpty) {
+      options.headers['Authorization'] = 'Bearer $customer';
+    } else {
+      final guest = await getGuestToken();
+      if (guest != null && guest.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $guest';
+      }
     }
     handler.next(options);
   }
@@ -106,7 +121,8 @@ class ApiService {
 
   /// Attempt to exchange the refresh token for a new access token.
   static Future<bool> _tryRefreshToken() async {
-    final refresh = await _storage.read(key: _refreshTokenKey);
+    final prefs = await _prefs;
+    final refresh = prefs.getString(_refreshTokenKey);
     if (refresh == null) return false;
 
     try {
@@ -196,17 +212,104 @@ class ApiService {
   // ── Token storage ─────────────────────────────────────────────────────
 
   static Future<void> setTokens(String access, String refresh) async {
-    await _storage.write(key: _accessTokenKey, value: access);
-    await _storage.write(key: _refreshTokenKey, value: refresh);
+    final prefs = await _prefs;
+    await prefs.setString(_accessTokenKey, access);
+    await prefs.setString(_refreshTokenKey, refresh);
   }
 
   static Future<void> clearTokens() async {
-    await _storage.delete(key: _accessTokenKey);
-    await _storage.delete(key: _refreshTokenKey);
+    final prefs = await _prefs;
+    await prefs.remove(_accessTokenKey);
+    await prefs.remove(_refreshTokenKey);
   }
 
   static Future<String?> getAccessToken() async {
-    return _storage.read(key: _accessTokenKey);
+    final prefs = await _prefs;
+    return prefs.getString(_accessTokenKey);
+  }
+
+  // ── Guest token ──────────────────────────────────────────────────────
+  //
+  // Guest tokens authenticate anonymous device-bound sessions on first
+  // app launch. They are NOT cleared on logout — the same device keeps
+  // its anonymous tracking identity across login cycles.
+
+  static Future<String?> getGuestToken() async {
+    final prefs = await _prefs;
+    return prefs.getString(_guestTokenKey);
+  }
+
+  static Future<void> setGuestToken(String token) async {
+    final prefs = await _prefs;
+    await prefs.setString(_guestTokenKey, token);
+  }
+
+  /// Ensure a guest token exists. Called once at app startup after
+  /// [init]. No-op if the user already has a customer or guest token.
+  /// Failures are swallowed — the app still works without a guest
+  /// token, it just loses anonymous analytics until the next launch.
+  static Future<void> bootstrapGuest() async {
+    if (await isLoggedIn()) return;
+    final existing = await getGuestToken();
+    if (existing != null && existing.isNotEmpty) return;
+
+    try {
+      final deviceId = await DeviceIdService.get();
+      final platform = Platform.isIOS
+          ? 'ios'
+          : Platform.isAndroid
+              ? 'android'
+              : Platform.isMacOS
+                  ? 'macos'
+                  : 'other';
+      final plain = Dio(BaseOptions(baseUrl: apiBaseUrl));
+      final response = await plain.post(
+        '/api/me/guest/init',
+        data: {
+          'device_id': deviceId,
+          'platform': platform,
+          'app_version': '1.0.0',
+          'locale': 'ru',
+        },
+      );
+      final data = response.data as Map<String, dynamic>;
+      final token = data['guest_token'] as String?;
+      if (token != null && token.isNotEmpty) {
+        await setGuestToken(token);
+      }
+    } catch (_) {
+      // Silent failure — analytics will resume on the next successful
+      // bootstrap or after the user logs in.
+    }
+  }
+
+  /// Decode the `sub` field out of the guest JWT so we can send it
+  /// along with verify-otp for the server-side merge. Returns null if
+  /// no guest token is stored or the token is malformed.
+  static Future<String?> getGuestSubject() async {
+    final token = await getGuestToken();
+    if (token == null) return null;
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      final padded = parts[1].padRight(
+        parts[1].length + (4 - parts[1].length % 4) % 4,
+        '=',
+      );
+      final payloadJson = String.fromCharCodes(
+        _base64UrlDecode(padded),
+      );
+      final match = RegExp(r'"sub"\s*:\s*"([^"]+)"').firstMatch(payloadJson);
+      return match?.group(1);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static List<int> _base64UrlDecode(String input) {
+    return Uri.parse('data:text/plain;base64,$input')
+        .data!
+        .contentAsBytes();
   }
 
   /// Quick connectivity check — pings the API health endpoint.
