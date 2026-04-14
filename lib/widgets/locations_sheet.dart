@@ -1,9 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
+import '../screens/locations_map_screen.dart';
 
-enum LocationType { store, storeSoon, vending, bus }
+enum LocationType { store, storeSoon, vending, bus, mobile, showroom }
 
 class ToolorLocation {
   final String? id;
@@ -12,6 +14,11 @@ class ToolorLocation {
   final LocationType type;
   final String? hours;
   final String? note;
+  final String? phone;
+  final double? latitude;
+  final double? longitude;
+  final String? photoUrl;
+  final bool isActive;
 
   const ToolorLocation({
     this.id,
@@ -20,6 +27,11 @@ class ToolorLocation {
     required this.type,
     this.hours,
     this.note,
+    this.phone,
+    this.latitude,
+    this.longitude,
+    this.photoUrl,
+    this.isActive = true,
   });
 
   /// Parse a location from the API JSON response.
@@ -39,6 +51,12 @@ class ToolorLocation {
       case 'bus':
         type = LocationType.bus;
         break;
+      case 'mobile':
+        type = LocationType.mobile;
+        break;
+      case 'showroom':
+        type = LocationType.showroom;
+        break;
       default:
         type = LocationType.store;
     }
@@ -49,6 +67,11 @@ class ToolorLocation {
       type: type,
       hours: json['hours'] as String?,
       note: json['note'] as String?,
+      phone: json['phone'] as String?,
+      latitude: json['latitude'] != null ? (json['latitude'] as num).toDouble() : null,
+      longitude: json['longitude'] != null ? (json['longitude'] as num).toDouble() : null,
+      photoUrl: json['photo_url'] as String?,
+      isActive: json['is_active'] as bool? ?? true,
     );
   }
 }
@@ -166,7 +189,33 @@ class _LocationsSheetContentState extends State<_LocationsSheetContent> {
           Text('ГДЕ ПРИМЕРИТЬ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 2, color: AppColors.textSecondary)),
           const SizedBox(height: S.x4),
           Text('Магазины, вендинг и мобильный шоурум', style: TextStyle(fontSize: 11, color: AppColors.textTertiary)),
-          const SizedBox(height: S.x16),
+          const SizedBox(height: S.x12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: S.x16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LocationsMapScreen()),
+                  );
+                },
+                icon: const Icon(Icons.map_rounded, size: 18),
+                label: const Text('Показать на карте'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: S.x12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.md)),
+                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: S.x12),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -195,7 +244,11 @@ class _LocationTile extends StatelessWidget {
       LocationType.storeSoon => (Icons.storefront_outlined, AppColors.gold, 'СКОРО'),
       LocationType.vending => (Icons.sell_outlined, const Color(0xFF9C7CF4), 'ВЕНДИНГ'),
       LocationType.bus => (Icons.directions_bus_rounded, const Color(0xFFFF8A65), 'BUS'),
+      LocationType.mobile => (Icons.directions_bus_rounded, const Color(0xFFFF8A65), 'МОБИЛЬНЫЙ'),
+      LocationType.showroom => (Icons.storefront_rounded, AppColors.accent, 'ШОУРУМ'),
     };
+
+    final hasPhoto = location.photoUrl != null && location.photoUrl!.isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(S.x16),
@@ -206,11 +259,33 @@ class _LocationTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(R.sm)),
-            child: Icon(icon, size: 18, color: color),
-          ),
+          hasPhoto
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(R.sm),
+                  child: CachedNetworkImage(
+                    imageUrl: location.photoUrl!,
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) => Container(
+                      width: 40,
+                      height: 40,
+                      color: color.withValues(alpha: 0.1),
+                    ),
+                    errorWidget: (_, _, _) => Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(R.sm)),
+                      child: Icon(icon, size: 18, color: color),
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(R.sm)),
+                  child: Icon(icon, size: 18, color: color),
+                ),
           const SizedBox(width: S.x12),
           Expanded(
             child: Column(
