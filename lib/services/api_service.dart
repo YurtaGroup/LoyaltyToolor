@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'analytics_service.dart';
 import 'device_id_service.dart';
 
 /// Base URL configured via --dart-define, or cool-group production by default.
@@ -52,6 +53,8 @@ class ApiService {
         onError: _onError,
       ),
     );
+
+    AnalyticsService.init();
   }
 
   // ── Interceptors ──────────────────────────────────────────────────────
