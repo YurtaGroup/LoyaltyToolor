@@ -1,11 +1,70 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
-import '../data/toolor_products.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
 import '../widgets/product_card.dart';
 import 'product_detail_screen.dart';
+
+/// Subcategory inside a category bucket (e.g. "Рубашки" under "Женщинам").
+class CategorySubcategory {
+  final String id;
+  final String name;
+  final int count;
+
+  const CategorySubcategory({
+    required this.id,
+    required this.name,
+    required this.count,
+  });
+
+  factory CategorySubcategory.fromJson(Map<String, dynamic> json) {
+    return CategorySubcategory(
+      id: json['id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      count: (json['count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Top-level category bucket returned by GET /api/v1/products/categories.
+class CategoryBucket {
+  final String id;          // "women" / "men" / "unisex" / "accessories" / "all"
+  final String name;        // "Женщинам" / "Мужчинам" / "ВСЕ" / ...
+  final String? audience;   // "women" / "men" / "unisex" / "kids" / null
+  final int count;
+  final List<CategorySubcategory> subcategories;
+
+  const CategoryBucket({
+    required this.id,
+    required this.name,
+    required this.audience,
+    required this.count,
+    required this.subcategories,
+  });
+
+  factory CategoryBucket.fromJson(Map<String, dynamic> json) {
+    final subs = (json['subcategories'] as List?) ?? const [];
+    return CategoryBucket(
+      id: json['id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      audience: json['audience'] as String?,
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      subcategories: subs
+          .map((s) => CategorySubcategory.fromJson(s as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  /// Synthetic "ВСЕ" bucket used as the first tab — passes no filter.
+  factory CategoryBucket.all(int totalCount) => CategoryBucket(
+        id: 'all',
+        name: 'ВСЕ',
+        audience: null,
+        count: totalCount,
+        subcategories: const [],
+      );
+}
 
 /// Catalog following ZARA/SSENSE pattern:
 /// - Full-width search → category pills → product grid
@@ -18,17 +77,16 @@ class CatalogScreen extends StatefulWidget {
   State<CatalogScreen> createState() => _CatalogScreenState();
 }
 
-class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
+class _CatalogScreenState extends State<CatalogScreen> {
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   String _query = '';
-  String? _sub;
 
-  final _cats = ['Все', ProductCategory.women, ProductCategory.men, ProductCategory.accessories, ProductCategory.sale];
+  List<CategoryBucket> _buckets = [CategoryBucket.all(0)];
+  CategoryBucket? _selectedBucket;         // null = ВСЕ (no filter)
+  CategorySubcategory? _selectedSub;       // null = "Все" within a bucket
 
   List<Product> _products = [];
-  List<Map<String, dynamic>> _apiCategories = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _loadError = false;
@@ -38,13 +96,6 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: _cats.length, vsync: this);
-    _tabCtrl.addListener(() {
-      if (!_tabCtrl.indexIsChanging) {
-        setState(() => _sub = null);
-        _fetchProducts(reset: true);
-      }
-    });
     _scrollCtrl.addListener(_onScroll);
     _fetchCategories();
     _fetchProducts(reset: true);
@@ -52,7 +103,6 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
 
   @override
   void dispose() {
-    _tabCtrl.dispose();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -68,11 +118,14 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     try {
       final response = await ApiService.dio.get('/api/v1/products/categories');
       if (!mounted) return;
+      final raw = (response.data as List).cast<Map<String, dynamic>>();
+      final parsed = raw.map(CategoryBucket.fromJson).toList();
+      final total = parsed.fold<int>(0, (sum, b) => sum + b.count);
       setState(() {
-        _apiCategories = (response.data as List).cast<Map<String, dynamic>>();
+        _buckets = [CategoryBucket.all(total), ...parsed];
       });
     } catch (_) {
-      // Categories fetch failed — subcategory chips will be empty
+      // Categories fetch failed — keep the single "ВСЕ" tab as fallback.
     }
   }
 
@@ -85,24 +138,25 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     }
 
     try {
-      final cat = _cats[_tabCtrl.index];
       final Map<String, dynamic> params = {
         'per_page': 20,
         'page': _currentPage,
       };
 
-      // Catalog shows all products regardless of selected store.
-
       if (_query.isNotEmpty) {
         params['search'] = _query;
       }
 
-      // Map category tab to API category_id if available
-      if (cat != 'Все' && cat != ProductCategory.sale) {
-        final match = _apiCategories.where((c) => c['name'] == cat);
-        if (match.isNotEmpty) {
-          params['category_id'] = match.first['id'];
-        }
+      // Apply audience filter when a concrete bucket (not "ВСЕ") is selected.
+      final bucket = _selectedBucket;
+      if (bucket != null && bucket.id != 'all') {
+        params['audience'] = bucket.audience ?? bucket.id;
+      }
+
+      // Apply subcategory filter when a concrete chip (not "Все") is selected.
+      final sub = _selectedSub;
+      if (sub != null) {
+        params['category'] = sub.id;
       }
 
       final response = await ApiService.dio.get(
@@ -111,18 +165,10 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       );
 
       final data = response.data;
-      var items = (data['items'] as List)
+      final items = (data['items'] as List)
           .map((json) => Product.fromJson(json as Map<String, dynamic>))
           .where((p) => p.price > 0)
           .toList();
-
-      // Client-side filtering for sale tab and subcategory
-      if (cat == ProductCategory.sale) {
-        items = items.where((p) => p.originalPrice != null).toList();
-      }
-      if (_sub != null) {
-        items = items.where((p) => p.subcategory == _sub).toList();
-      }
 
       if (!mounted) return;
       setState(() {
@@ -153,23 +199,28 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     await _fetchProducts();
   }
 
-  List<String> _subs() {
-    final cat = _cats[_tabCtrl.index];
-    if (cat == 'Все' || cat == ProductCategory.sale) return [];
-    // Derive subcategories from API categories data
-    final match = _apiCategories.where((c) => c['name'] == cat);
-    if (match.isNotEmpty) {
-      final subcats = match.first['subcategories'] as List?;
-      if (subcats != null) {
-        return subcats.map((s) => s['name'] as String).toList()..sort();
-      }
-    }
-    // Fallback: derive from loaded products
-    return _products.map((p) => p.subcategory).where((s) => s.isNotEmpty).toSet().toList()..sort();
+  void _onBucketTap(CategoryBucket bucket) {
+    if (_selectedBucket?.id == bucket.id) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _selectedBucket = bucket.id == 'all' ? null : bucket;
+      _selectedSub = null;
+    });
+    _fetchProducts(reset: true);
+  }
+
+  void _onSubTap(CategorySubcategory? sub) {
+    if (_selectedSub?.id == sub?.id) return;
+    HapticFeedback.selectionClick();
+    setState(() => _selectedSub = sub);
+    _fetchProducts(reset: true);
   }
 
   @override
   Widget build(BuildContext context) {
+    final activeBucket = _selectedBucket;
+    final showChips = activeBucket != null && activeBucket.subcategories.isNotEmpty;
+
     return SafeArea(
       child: Column(
         children: [
@@ -196,69 +247,88 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
             ),
           ),
 
-          // Category tabs — underline indicator, uppercase
-          TabBar(
-            controller: _tabCtrl,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelColor: AppColors.textPrimary,
-            unselectedLabelColor: AppColors.textTertiary,
-            indicatorColor: AppColors.textPrimary,
-            indicatorSize: TabBarIndicatorSize.label,
-            indicatorWeight: 1.5,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, letterSpacing: 1),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400, fontSize: 12, letterSpacing: 1),
-            dividerColor: Colors.transparent,
-            padding: const EdgeInsets.only(left: S.x12, top: S.x4),
-            tabs: _cats.map((c) => Tab(text: c.toUpperCase())).toList(),
-            onTap: (_) => setState(() {}),
+          // Category tabs — horizontal scrollable row, dynamic from API
+          SizedBox(
+            height: 44,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(S.x12, S.x8, S.x12, 0),
+              itemCount: _buckets.length,
+              itemBuilder: (_, i) {
+                final bucket = _buckets[i];
+                final isSelected = bucket.id == 'all'
+                    ? _selectedBucket == null
+                    : _selectedBucket?.id == bucket.id;
+                return GestureDetector(
+                  onTap: () => _onBucketTap(bucket),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isSelected ? AppColors.textPrimary : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      bucket.name.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        letterSpacing: 1,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        color: isSelected ? AppColors.textPrimary : AppColors.textTertiary,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
 
-          // Subcategory chips
-          AnimatedBuilder(
-            animation: _tabCtrl,
-            builder: (_, _) {
-              final subs = _subs();
-              if (subs.isEmpty) return const SizedBox(height: S.x4);
-              return SizedBox(
-                height: 40,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(S.x16, S.x4, S.x16, S.x4),
-                  itemCount: subs.length + 1,
-                  itemBuilder: (_, i) {
-                    final isAll = i == 0;
-                    final label = isAll ? 'Все' : subs[i - 1];
-                    final val = isAll ? null : subs[i - 1];
-                    final sel = _sub == val;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: S.x6),
-                      child: GestureDetector(
-                        onTap: () { HapticFeedback.selectionClick(); setState(() => _sub = val); _fetchProducts(reset: true); },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x6),
-                          decoration: BoxDecoration(
-                            color: sel ? AppColors.textPrimary : AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(R.pill),
-                          ),
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: sel ? AppColors.textInverse : AppColors.textSecondary,
-                              fontWeight: sel ? FontWeight.w600 : FontWeight.w400,
-                            ),
+          // Subcategory chips — only when a bucket (not ВСЕ) is selected
+          if (showChips)
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(S.x16, S.x4, S.x16, S.x4),
+                itemCount: activeBucket.subcategories.length + 1,
+                itemBuilder: (_, i) {
+                  final isAll = i == 0;
+                  final sub = isAll ? null : activeBucket.subcategories[i - 1];
+                  final label = isAll ? 'Все' : sub!.name;
+                  final selected = isAll ? _selectedSub == null : _selectedSub?.id == sub!.id;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: S.x6),
+                    child: GestureDetector(
+                      onTap: () => _onSubTap(sub),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x6),
+                        decoration: BoxDecoration(
+                          color: selected ? AppColors.textPrimary : AppColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(R.pill),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: selected ? AppColors.textInverse : AppColors.textSecondary,
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            const SizedBox(height: S.x4),
 
           // Product count
           Padding(

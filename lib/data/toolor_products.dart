@@ -1,25 +1,7 @@
-// TOOLOR brand constants and category definitions.
-// Product data is fetched from the API (GET /api/v1/products).
-
-class Toolor {
-  static const String brandName = 'Toolor';
-  static const String brandDescription =
-      'Международный бренд функциональной верхней одежды и аксессуаров, '
-      'вдохновленный эстетикой и стилем жизни digital-номадов';
-  static const String phone = '+996 998 844 444';
-  static const String email = 'salestoolor@coolgroup.kg';
-  static const String address = 'Бишкек, AsiaMall, 2 этаж, бутик 19(1)';
-  static const String workingHours = 'Ежедневно 10:00–22:00';
-  static const String currency = 'сом';
-  static const String baseUrl = 'https://toolorkg.com';
-}
-
-class ProductCategory {
-  static const String men = 'Мужчинам';
-  static const String women = 'Женщинам';
-  static const String accessories = 'Аксессуары';
-  static const String sale = 'Скидки';
-}
+// Product category / subcategory constants used by the catalog filters.
+// Brand address, phone and hours now come from GET /api/v1/locations.
+// Product data is fetched from GET /api/v1/products.
+// Categories are fetched from GET /api/v1/products/categories (see CategoryBucket).
 
 class ProductSubcategory {
   static const String tshirts = 'Футболки';
