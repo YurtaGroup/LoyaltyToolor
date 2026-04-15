@@ -6,68 +6,25 @@ import '../services/api_service.dart';
 import '../widgets/product_card.dart';
 import 'product_detail_screen.dart';
 
-/// Subcategory inside a category bucket (e.g. "Рубашки" under "Женщинам").
-class CategorySubcategory {
+/// Flat category item returned by GET /api/v1/products/categories.
+class CategoryItem {
   final String id;
   final String name;
   final int count;
 
-  const CategorySubcategory({
-    required this.id,
-    required this.name,
-    required this.count,
-  });
+  CategoryItem({required this.id, required this.name, required this.count});
 
-  factory CategorySubcategory.fromJson(Map<String, dynamic> json) {
-    return CategorySubcategory(
-      id: json['id']?.toString() ?? '',
-      name: json['name'] as String? ?? '',
-      count: (json['count'] as num?)?.toInt() ?? 0,
-    );
-  }
-}
-
-/// Top-level category bucket returned by GET /api/v1/products/categories.
-class CategoryBucket {
-  final String id;          // "women" / "men" / "unisex" / "accessories" / "all"
-  final String name;        // "Женщинам" / "Мужчинам" / "ВСЕ" / ...
-  final String? audience;   // "women" / "men" / "unisex" / "kids" / null
-  final int count;
-  final List<CategorySubcategory> subcategories;
-
-  const CategoryBucket({
-    required this.id,
-    required this.name,
-    required this.audience,
-    required this.count,
-    required this.subcategories,
-  });
-
-  factory CategoryBucket.fromJson(Map<String, dynamic> json) {
-    final subs = (json['subcategories'] as List?) ?? const [];
-    return CategoryBucket(
-      id: json['id']?.toString() ?? '',
-      name: json['name'] as String? ?? '',
-      audience: json['audience'] as String?,
-      count: (json['count'] as num?)?.toInt() ?? 0,
-      subcategories: subs
-          .map((s) => CategorySubcategory.fromJson(s as Map<String, dynamic>))
-          .toList(),
-    );
-  }
-
-  /// Synthetic "ВСЕ" bucket used as the first tab — passes no filter.
-  factory CategoryBucket.all(int totalCount) => CategoryBucket(
-        id: 'all',
-        name: 'ВСЕ',
-        audience: null,
-        count: totalCount,
-        subcategories: const [],
+  factory CategoryItem.fromJson(Map<String, dynamic> json) => CategoryItem(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        count: (json['count'] ?? 0) as int,
       );
+
+  static CategoryItem all() => CategoryItem(id: 'all', name: 'ВСЕ', count: 0);
 }
 
 /// Catalog following ZARA/SSENSE pattern:
-/// - Full-width search → category pills → product grid
+/// - Full-width search → category tabs → product grid
 /// - Product count shown for context
 /// - Clean 2-col grid with generous image space
 class CatalogScreen extends StatefulWidget {
@@ -82,9 +39,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
   final _scrollCtrl = ScrollController();
   String _query = '';
 
-  List<CategoryBucket> _buckets = [CategoryBucket.all(0)];
-  CategoryBucket? _selectedBucket;         // null = ВСЕ (no filter)
-  CategorySubcategory? _selectedSub;       // null = "Все" within a bucket
+  List<CategoryItem> _categories = [CategoryItem.all()];
+  CategoryItem _selectedCategory = CategoryItem.all();
 
   List<Product> _products = [];
   bool _isLoading = true;
@@ -118,11 +74,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
     try {
       final response = await ApiService.dio.get('/api/v1/products/categories');
       if (!mounted) return;
-      final raw = (response.data as List).cast<Map<String, dynamic>>();
-      final parsed = raw.map(CategoryBucket.fromJson).toList();
-      final total = parsed.fold<int>(0, (sum, b) => sum + b.count);
+      final raw = response.data as List;
       setState(() {
-        _buckets = [CategoryBucket.all(total), ...parsed];
+        _categories = [
+          CategoryItem.all(),
+          ...raw.map((c) => CategoryItem.fromJson(c as Map<String, dynamic>)),
+        ];
       });
     } catch (_) {
       // Categories fetch failed — keep the single "ВСЕ" tab as fallback.
@@ -138,26 +95,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
     }
 
     try {
-      final Map<String, dynamic> params = {
-        'per_page': 20,
+      final params = <String, dynamic>{
         'page': _currentPage,
+        'size': 20,
+        if (_query.isNotEmpty) 'search': _query,
+        if (_selectedCategory.id != 'all') 'category': _selectedCategory.id,
       };
-
-      if (_query.isNotEmpty) {
-        params['search'] = _query;
-      }
-
-      // Apply audience filter when a concrete bucket (not "ВСЕ") is selected.
-      final bucket = _selectedBucket;
-      if (bucket != null && bucket.id != 'all') {
-        params['audience'] = bucket.audience ?? bucket.id;
-      }
-
-      // Apply subcategory filter when a concrete chip (not "Все") is selected.
-      final sub = _selectedSub;
-      if (sub != null) {
-        params['category'] = sub.id;
-      }
 
       final response = await ApiService.dio.get(
         '/api/v1/products',
@@ -199,28 +142,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
     await _fetchProducts();
   }
 
-  void _onBucketTap(CategoryBucket bucket) {
-    if (_selectedBucket?.id == bucket.id) return;
+  void _onCategoryTap(CategoryItem category) {
+    if (_selectedCategory.id == category.id) return;
     HapticFeedback.selectionClick();
     setState(() {
-      _selectedBucket = bucket.id == 'all' ? null : bucket;
-      _selectedSub = null;
+      _selectedCategory = category;
+      _currentPage = 1;
+      _products = [];
     });
-    _fetchProducts(reset: true);
-  }
-
-  void _onSubTap(CategorySubcategory? sub) {
-    if (_selectedSub?.id == sub?.id) return;
-    HapticFeedback.selectionClick();
-    setState(() => _selectedSub = sub);
     _fetchProducts(reset: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeBucket = _selectedBucket;
-    final showChips = activeBucket != null && activeBucket.subcategories.isNotEmpty;
-
     return SafeArea(
       child: Column(
         children: [
@@ -239,7 +173,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 prefixIcon: Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 20),
                 suffixIcon: _query.isNotEmpty
                     ? GestureDetector(
-                        onTap: () { _searchCtrl.clear(); setState(() => _query = ''); _fetchProducts(reset: true); },
+                        onTap: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                          _fetchProducts(reset: true);
+                        },
                         child: Icon(Icons.close_rounded, color: AppColors.textTertiary, size: 18),
                       )
                     : null,
@@ -247,21 +185,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
             ),
           ),
 
-          // Category tabs — horizontal scrollable row, dynamic from API
+          // Category tabs — horizontal scrollable row, flat list from API
           SizedBox(
             height: 44,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(S.x12, S.x8, S.x12, 0),
-              itemCount: _buckets.length,
+              itemCount: _categories.length,
               itemBuilder: (_, i) {
-                final bucket = _buckets[i];
-                final isSelected = bucket.id == 'all'
-                    ? _selectedBucket == null
-                    : _selectedBucket?.id == bucket.id;
+                final category = _categories[i];
+                final isSelected = _selectedCategory.id == category.id;
                 return GestureDetector(
-                  onTap: () => _onBucketTap(bucket),
+                  onTap: () => _onCategoryTap(category),
                   behavior: HitTestBehavior.opaque,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x8),
@@ -274,7 +210,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                     ),
                     child: Text(
-                      bucket.name.toUpperCase(),
+                      category.name.toUpperCase(),
                       style: TextStyle(
                         fontSize: 12,
                         letterSpacing: 1,
@@ -288,54 +224,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
             ),
           ),
 
-          // Subcategory chips — only when a bucket (not ВСЕ) is selected
-          if (showChips)
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(S.x16, S.x4, S.x16, S.x4),
-                itemCount: activeBucket.subcategories.length + 1,
-                itemBuilder: (_, i) {
-                  final isAll = i == 0;
-                  final sub = isAll ? null : activeBucket.subcategories[i - 1];
-                  final label = isAll ? 'Все' : sub!.name;
-                  final selected = isAll ? _selectedSub == null : _selectedSub?.id == sub!.id;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: S.x6),
-                    child: GestureDetector(
-                      onTap: () => _onSubTap(sub),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x6),
-                        decoration: BoxDecoration(
-                          color: selected ? AppColors.textPrimary : AppColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(R.pill),
-                        ),
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: selected ? AppColors.textInverse : AppColors.textSecondary,
-                            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            const SizedBox(height: S.x4),
+          const SizedBox(height: S.x4),
 
           // Product count
           Padding(
             padding: const EdgeInsets.fromLTRB(S.x16, S.x8, S.x16, S.x4),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('${_products.length} товаров', style: TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+              child: Text(
+                '${_products.length} товаров',
+                style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+              ),
             ),
           ),
 
@@ -380,28 +279,31 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             ),
                           )
                         : GridView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.fromLTRB(S.x16, S.x8, S.x16, S.x24),
-                        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.56,
-                          crossAxisSpacing: S.x12,
-                          mainAxisSpacing: S.x20,
-                        ),
-                        itemCount: _products.length + (_isLoadingMore ? 2 : 0),
-                        itemBuilder: (_, i) {
-                          if (i >= _products.length) {
-                            return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)));
-                          }
-                          final p = _products[i];
-                          return ProductCard(
-                            product: p,
-                            heroTag: 'cat_${p.id}',
-                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(product: p, heroTag: 'cat_${p.id}'))),
-                          );
-                        },
-                      ),
+                            controller: _scrollCtrl,
+                            padding: const EdgeInsets.fromLTRB(S.x16, S.x8, S.x16, S.x24),
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 0.56,
+                              crossAxisSpacing: S.x12,
+                              mainAxisSpacing: S.x20,
+                            ),
+                            itemCount: _products.length + (_isLoadingMore ? 2 : 0),
+                            itemBuilder: (_, i) {
+                              if (i >= _products.length) {
+                                return const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)));
+                              }
+                              final p = _products[i];
+                              return ProductCard(
+                                product: p,
+                                heroTag: 'cat_${p.id}',
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => ProductDetailScreen(product: p, heroTag: 'cat_${p.id}')),
+                                ),
+                              );
+                            },
+                          ),
           ),
         ],
       ),

@@ -1,7 +1,7 @@
 // Product category / subcategory constants used by the catalog filters.
 // Brand address, phone and hours now come from GET /api/v1/locations.
 // Product data is fetched from GET /api/v1/products.
-// Categories are fetched from GET /api/v1/products/categories (see CategoryBucket).
+// Categories are fetched from GET /api/v1/products/categories (flat list, see CategoryItem).
 
 class ProductSubcategory {
   static const String tshirts = 'Футболки';
