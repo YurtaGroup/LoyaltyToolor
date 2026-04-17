@@ -209,10 +209,12 @@ class _OrderTile extends StatelessWidget {
   }
 
   (Color, Color) _statusColors(String status) => switch (status) {
-        'created' => (AppColors.textSecondary,
-            AppColors.textSecondary.withValues(alpha: 0.1)),
+        'created' || 'pending' => (AppColors.gold,
+            AppColors.gold.withValues(alpha: 0.1)),
+        'paid' =>
+          (Colors.blueAccent, Colors.blueAccent.withValues(alpha: 0.1)),
         'payment_confirmed' =>
-          (AppColors.accent, AppColors.accent.withValues(alpha: 0.1)),
+          (Colors.green, Colors.green.withValues(alpha: 0.1)),
         'processing' =>
           (AppColors.accent, AppColors.accent.withValues(alpha: 0.1)),
         'ready_for_pickup' =>
