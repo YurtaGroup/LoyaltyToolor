@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class OrderItem {
   final String id;
   final String productId;
@@ -118,12 +120,23 @@ class AppOrder {
   /// Human-readable status label in Russian.
   String get statusLabel => switch (status) {
         'created' => 'Создан',
-        'payment_confirmed' => 'Оплата подтверждена',
+        'pending' => 'Ждёт оплаты',
+        'paid' => 'Оплачен',
+        'payment_confirmed' => 'Выдан',
         'processing' => 'В обработке',
         'ready_for_pickup' => 'Готов к выдаче',
         'shipped' => 'Отправлен',
         'delivered' => 'Доставлен',
         'cancelled' => 'Отменён',
         _ => status,
+      };
+
+  /// Status badge color.
+  Color get statusColor => switch (status) {
+        'pending' || 'created' => const Color(0xFFF59E0B),
+        'paid' => const Color(0xFF3B82F6),
+        'payment_confirmed' => const Color(0xFF22C55E),
+        'cancelled' => const Color(0xFF9CA3AF),
+        _ => const Color(0xFF6B7280),
       };
 }
