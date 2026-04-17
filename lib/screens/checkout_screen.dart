@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/locations_sheet.dart';
 import '../models/product.dart';
+import 'orders_screen.dart';
 // Conditionally import Finik SDK (only works on mobile)
 import 'package:finik_sdk/finik_sdk.dart';
 
@@ -875,7 +876,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   size: 36, color: Colors.white),
             ),
             const SizedBox(height: S.x24),
-            Text('Оплата прошла успешно',
+            Text('Заказ оплачен!',
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -890,7 +891,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ],
             const SizedBox(height: S.x8),
             Text(
-              'Заказ подтверждён и принят в обработку.',
+              'Ожидайте выдачу в выбранной точке.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 14,
@@ -936,6 +937,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               width: double.infinity,
               height: 54,
               child: ElevatedButton(
+                onPressed: () {
+                  widget.cart.clear();
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                    (route) => route.isFirst,
+                  );
+                },
+                child: const Text('МОИ ЗАКАЗЫ'),
+              ),
+            ),
+            const SizedBox(height: S.x12),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: OutlinedButton(
                 onPressed: () {
                   widget.cart.clear();
                   Navigator.pop(context);
