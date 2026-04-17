@@ -25,7 +25,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   bool get _canCancel =>
-      _order.status == 'pending' || _order.status == 'created';
+      _order.status == 'pending' ||
+      _order.status == 'created' ||
+      _order.status == 'paid';
+
+  Future<void> _refreshOrder() async {
+    try {
+      final response =
+          await ApiService.dio.get('/api/v1/orders/${_order.id}');
+      if (mounted && response.data is Map<String, dynamic>) {
+        setState(() {
+          _order = AppOrder.fromJson(response.data as Map<String, dynamic>);
+        });
+      }
+    } catch (e) {
+      debugPrint('Refresh error: $e');
+    }
+  }
 
   Future<void> _cancelOrder() async {
     final confirm = await showDialog<bool>(
@@ -100,8 +116,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     return Scaffold(
       appBar: AppBar(title: Text('Заказ ${_order.orderNumber}')),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
+        child: RefreshIndicator(
+          onRefresh: _refreshOrder,
+          child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(S.x16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,6 +144,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               const SizedBox(height: S.x32),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -205,12 +224,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _statusTimeline() {
     final allStatuses = [
-      ('created', 'Создан'),
-      ('payment_confirmed', 'Оплата подтверждена'),
-      ('processing', 'В обработке'),
-      ('ready_for_pickup', 'Готов к выдаче'),
-      ('shipped', 'Отправлен'),
-      ('delivered', 'Доставлен'),
+      ('pending', 'Создан'),
+      ('paid', 'Оплачен'),
+      ('payment_confirmed', 'Выдан'),
     ];
 
     // If cancelled, show a single-item timeline
