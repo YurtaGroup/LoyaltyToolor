@@ -64,3 +64,6 @@ admin/out/
 
 # Docker
 pgdata/
+
+# OMC (oh-my-claudecode) session state — local only
+.omc/
