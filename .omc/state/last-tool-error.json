@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cat /Users/izzat/PycharmProjects/LoyaltyToolor/.gitignore 2>/dev/null | head -20; echo ---; ls /Users/izzat/PycharmProjects/LoyaltyToolor/dart_defines* 2>/dev/null; echo ---; ls /Users/izz...",
+  "error": "Exit code 1\n# Environment / secrets\n.env\n.env.local\n\n# Miscellaneous\n*.class\n*.log\n*.pyc\n*.swp\n.DS_Store\n.atom/\n.build/\n.buildlog/\n.history\n.svn/\n.swiftpm/\nmigrate_working_dir/\n\n# IntelliJ related\n*.iml\n---\n(eval):1: no matches found: /Users/izzat/PycharmProjects/LoyaltyToolor/dart_defines*\n---\n(eval):1: no matches found: /Users/izzat/PycharmProjects/LoyaltyToolor/*.env",
+  "timestamp": "2026-04-19T15:51:57.504Z",
+  "retry_count": 1
+}

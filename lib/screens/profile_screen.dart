@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/theme_provider.dart';
 import '../models/user.dart';
-import 'auth_screen.dart';
 import '../models/loyalty.dart';
+import 'auth_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/locations_sheet.dart';
 import '../services/api_service.dart';
-import '../models/product.dart';
 import 'edit_profile_screen.dart';
 import 'notifications_screen.dart';
 import 'orders_screen.dart';
+import 'promo_codes_screen.dart';
+import 'transaction_history_screen.dart';
 
 /// Profile/Loyalty screen following premium brand patterns:
 /// - Stats dashboard (3 cols)
@@ -63,7 +63,6 @@ class ProfileScreen extends StatelessWidget {
     final user = auth.user;
     if (user == null) return const SizedBox.shrink();
     final loyalty = auth.loyalty;
-    if (loyalty == null) return const SizedBox.shrink();
 
     return SafeArea(
       child: CustomScrollView(
@@ -77,16 +76,10 @@ class ProfileScreen extends StatelessWidget {
                   _userRow(context, user),
                   const SizedBox(height: S.x20),
                   _birthdaySection(context, user, auth),
-                  _stats(loyalty),
-                  const SizedBox(height: S.x20),
-                  _qrCard(context, loyalty),
-                  const SizedBox(height: S.x20),
-                  _milestoneCard(loyalty),
-                  const SizedBox(height: S.x20),
-                  _tiers(loyalty),
-                  const SizedBox(height: S.x20),
-                  _history(loyalty),
-                  const SizedBox(height: S.x20),
+                  if (loyalty != null) ...[
+                    _stats(loyalty),
+                    const SizedBox(height: S.x20),
+                  ],
                   _menu(context),
                   const SizedBox(height: S.x16),
                   GestureDetector(
@@ -338,295 +331,6 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _qrCard(BuildContext context, LoyaltyAccount l) {
-    final auth = context.watch<AuthProvider>();
-    final qrData = auth.qrToken ?? l.qrCode;
-    return GestureDetector(
-      onTap: () { HapticFeedback.lightImpact(); _showQR(context, l); },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: S.x24),
-        decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(R.lg)),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('НАЖМИТЕ ДЛЯ УВЕЛИЧЕНИЯ', style: TextStyle(fontSize: 9, letterSpacing: 1.5, color: AppColors.textTertiary, fontWeight: FontWeight.w500)),
-                const SizedBox(width: S.x8),
-                _ProfileQrPulseIndicator(),
-              ],
-            ),
-            const SizedBox(height: S.x16),
-            Container(
-              padding: const EdgeInsets.all(S.x8),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.md)),
-              child: auth.qrToken != null
-                  ? QrImageView(data: qrData, version: QrVersions.auto, size: 140, backgroundColor: Colors.white)
-                  : const SizedBox(width: 140, height: 140, child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))),
-            ),
-            const SizedBox(height: S.x12),
-            Text(
-              auth.qrToken != null ? 'QR обновляется автоматически' : 'Загрузка...',
-              style: TextStyle(fontSize: 11, color: AppColors.textTertiary, letterSpacing: 1.5, fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showQR(BuildContext context, LoyaltyAccount l) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Consumer<AuthProvider>(
-        builder: (ctx, auth, _) {
-          final qrData = auth.qrToken ?? l.qrCode;
-          return Container(
-            margin: const EdgeInsets.fromLTRB(S.x16, 0, S.x16, S.x16),
-            padding: const EdgeInsets.symmetric(horizontal: S.x32, vertical: S.x32),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(R.xl)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('ПОКАЖИТЕ НА КАССЕ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 2, color: AppColors.textSecondary)),
-                    const SizedBox(width: S.x8),
-                    _ProfileQrPulseIndicator(),
-                  ],
-                ),
-                const SizedBox(height: S.x24),
-                Container(
-                  padding: const EdgeInsets.all(S.x16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.lg)),
-                  child: auth.qrToken != null
-                      ? QrImageView(data: qrData, version: QrVersions.auto, size: 220, backgroundColor: Colors.white)
-                      : const SizedBox(width: 220, height: 220, child: Center(child: CircularProgressIndicator())),
-                ),
-                const SizedBox(height: S.x16),
-                Text(
-                  auth.qrToken != null ? 'QR обновляется автоматически' : 'Загрузка...',
-                  style: TextStyle(fontSize: 13, color: AppColors.textTertiary, letterSpacing: 2, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Loyalty Milestones ───────────────────────────────────────────
-
-  Widget _milestoneCard(LoyaltyAccount l) {
-    final (Color tierColor, String tierLabel) = _tierInfo(l.tier);
-    final nextTierLabel = _nextTierName(l.tier);
-    final nextTierColor = _nextTierColor(l.tier);
-    final remaining = l.nextTierThreshold - l.totalSpent;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(S.x16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(R.md),
-        border: Border.all(color: tierColor.withValues(alpha: 0.15)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('ПРОГРЕСС УРОВНЯ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.5, color: AppColors.textTertiary)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: S.x8, vertical: S.x2),
-                decoration: BoxDecoration(
-                  color: tierColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.star_rounded, size: 12, color: tierColor),
-                    const SizedBox(width: S.x4),
-                    Text(tierLabel.toUpperCase(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: tierColor, letterSpacing: 0.5)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: S.x16),
-          if (l.tier != LoyaltyTier.at) ...[
-            // Progress bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: l.progressToNextTier.clamp(0.0, 1.0),
-                backgroundColor: AppColors.surfaceBright,
-                valueColor: AlwaysStoppedAnimation(nextTierColor),
-                minHeight: 8,
-              ),
-            ),
-            const SizedBox(height: S.x12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.star_rounded, size: 14, color: tierColor),
-                    const SizedBox(width: S.x4),
-                    Text(tierLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: tierColor)),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Text(nextTierLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: nextTierColor)),
-                    const SizedBox(width: S.x4),
-                    Icon(Icons.star_rounded, size: 14, color: nextTierColor),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: S.x8),
-            Text(
-              'До уровня $nextTierLabel осталось ${Product.formatPrice(remaining)} сом',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-          ] else ...[
-            // Platinum — max level
-            Row(
-              children: [
-                Icon(Icons.auto_awesome_rounded, size: 20, color: AppColors.platinum),
-                const SizedBox(width: S.x8),
-                Expanded(
-                  child: Text('Максимальный уровень достигнут!', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.platinum)),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  (Color, String) _tierInfo(LoyaltyTier tier) => switch (tier) {
-    LoyaltyTier.kulun => (AppColors.bronze, 'Кулун'),
-    LoyaltyTier.tai => (AppColors.silver, 'Тай'),
-    LoyaltyTier.kunan => (AppColors.goldTier, 'Кунан'),
-    LoyaltyTier.at => (AppColors.platinum, 'Ат'),
-  };
-
-  String _nextTierName(LoyaltyTier tier) => switch (tier) {
-    LoyaltyTier.kulun => 'Тай',
-    LoyaltyTier.tai => 'Кунан',
-    LoyaltyTier.kunan => 'Ат',
-    LoyaltyTier.at => 'Ат',
-  };
-
-  Color _nextTierColor(LoyaltyTier tier) => switch (tier) {
-    LoyaltyTier.kulun => AppColors.silver,
-    LoyaltyTier.tai => AppColors.goldTier,
-    LoyaltyTier.kunan => AppColors.platinum,
-    LoyaltyTier.at => AppColors.platinum,
-  };
-
-  Widget _tiers(LoyaltyAccount l) {
-    final tiers = [
-      ('КУЛУН', '3%', '0', LoyaltyTier.kulun, AppColors.bronze),
-      ('ТАЙ', '5%', '50K', LoyaltyTier.tai, AppColors.silver),
-      ('КУНАН', '8%', '150K', LoyaltyTier.kunan, AppColors.goldTier),
-      ('АТ', '12%', '300K', LoyaltyTier.at, AppColors.platinum),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(S.x16),
-      decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(R.md)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('УРОВНИ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.5, color: AppColors.textTertiary)),
-          const SizedBox(height: S.x12),
-          ...tiers.map((t) {
-            final active = t.$4 == l.tier;
-            final c = t.$5;
-            return Container(
-              margin: const EdgeInsets.only(bottom: S.x6),
-              padding: const EdgeInsets.symmetric(horizontal: S.x12, vertical: S.x8),
-              decoration: BoxDecoration(
-                color: active ? c.withValues(alpha: 0.08) : Colors.transparent,
-                borderRadius: BorderRadius.circular(R.sm),
-                border: active ? Border.all(color: c.withValues(alpha: 0.2)) : null,
-              ),
-              child: Row(
-                children: [
-                  Icon(active ? Icons.star_rounded : Icons.star_border_rounded, size: 16, color: c),
-                  const SizedBox(width: S.x8),
-                  Expanded(child: Text(t.$1, style: TextStyle(fontSize: 12, fontWeight: active ? FontWeight.w600 : FontWeight.w400, color: active ? c : AppColors.textSecondary, letterSpacing: 0.5))),
-                  Text(t.$2, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? c : AppColors.textTertiary)),
-                  const SizedBox(width: S.x12),
-                  Text('от ${t.$3}', style: TextStyle(fontSize: 10, color: active ? c.withValues(alpha: 0.5) : AppColors.textTertiary)),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _history(LoyaltyAccount l) {
-    final fmt = DateFormat('dd.MM.yyyy');
-    return Container(
-      padding: const EdgeInsets.all(S.x16),
-      decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(R.md)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('ИСТОРИЯ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.5, color: AppColors.textTertiary)),
-          const SizedBox(height: S.x12),
-          ...l.transactions.map((tx) {
-            final (IconData ic, Color c) = switch (tx.type) {
-              TransactionType.purchase => (Icons.shopping_bag_rounded, AppColors.accent),
-              TransactionType.pointsRedeemed => (Icons.redeem_rounded, AppColors.sale),
-              TransactionType.bonus => (Icons.card_giftcard_rounded, AppColors.gold),
-              TransactionType.referral => (Icons.people_rounded, Colors.blueAccent),
-            };
-            return Padding(
-              padding: const EdgeInsets.only(bottom: S.x12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(color: c.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(R.sm)),
-                    child: Icon(ic, size: 14, color: c),
-                  ),
-                  const SizedBox(width: S.x12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(tx.description, style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
-                        Text(fmt.format(tx.date), style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    '${tx.pointsEarned > 0 ? '+' : ''}${tx.pointsEarned}',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tx.pointsEarned >= 0 ? AppColors.accent : AppColors.sale),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
   Widget _menu(BuildContext context) {
     return Container(
       decoration: BoxDecoration(color: AppColors.surfaceElevated, borderRadius: BorderRadius.circular(R.md)),
@@ -643,8 +347,14 @@ class ProfileScreen extends StatelessWidget {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen()));
           }),
           _div(),
+          _menuRow(Icons.history_rounded, 'История баллов', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const TransactionHistoryScreen()));
+          }),
+          _div(),
           _div(), _menuRow(Icons.card_giftcard_rounded, 'Box подписка', () => _showBox(context)),
-          _div(), _menuRow(Icons.local_offer_outlined, 'Промокоды', () {}),
+          _div(), _menuRow(Icons.local_offer_outlined, 'Промокоды', () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const PromoCodesScreen()));
+          }),
           _div(), _menuRow(Icons.location_on_outlined, 'Наши точки', () => showLocationsSheet(context)),
           _div(), _menuRow(Icons.notifications_outlined, 'Уведомления', () {
             Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
@@ -743,29 +453,98 @@ class ProfileScreen extends StatelessWidget {
 
   void _showAbout(BuildContext context) {
     showModalBottomSheet(
-      context: context, backgroundColor: Colors.transparent,
+      context: context,
+      backgroundColor: Colors.transparent,
       builder: (_) => Container(
         margin: const EdgeInsets.fromLTRB(S.x16, 0, S.x16, S.x16),
         padding: const EdgeInsets.all(S.x24),
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(R.xl)),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Text('TOOLOR', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 6, color: AppColors.textPrimary))),
-          const SizedBox(height: S.x16),
-          Text('Международный бренд функциональной верхней одежды, вдохновленный эстетикой digital-номадов.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5)),
-          const SizedBox(height: S.x16),
-          _aboutRow(Icons.location_on_outlined, 'AsiaMall, 2 этаж, бутик 19(1)'),
-          const SizedBox(height: S.x8),
-          _aboutRow(Icons.phone_outlined, '+996 998 844 444'),
-          const SizedBox(height: S.x8),
-          _aboutRow(Icons.language_rounded, 'toolorkg.com'),
-          const SizedBox(height: S.x16),
-          Center(child: Text('v1.0.0', style: TextStyle(fontSize: 11, color: AppColors.textTertiary))),
-        ]),
+        child: FutureBuilder<Map<String, dynamic>?>(
+          future: _fetchPrimaryStore(),
+          builder: (context, snap) {
+            final store = snap.data;
+            final address = store?['address'] as String?;
+            final phone = store?['phone'] as String?;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Text(
+                    'TOOLOR',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 6,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: S.x16),
+                Text(
+                  'Международный бренд функциональной верхней одежды, '
+                  'вдохновленный эстетикой digital-номадов.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                ),
+                const SizedBox(height: S.x16),
+                if (snap.connectionState == ConnectionState.waiting)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: S.x8),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  )
+                else ...[
+                  if (address != null && address.isNotEmpty) ...[
+                    _aboutRow(Icons.location_on_outlined, address),
+                    const SizedBox(height: S.x8),
+                  ],
+                  if (phone != null && phone.isNotEmpty) ...[
+                    _aboutRow(Icons.phone_outlined, phone),
+                    const SizedBox(height: S.x8),
+                  ],
+                  _aboutRow(Icons.language_rounded, 'toolorkg.com'),
+                ],
+                const SizedBox(height: S.x16),
+                Center(child: Text('v1.0.0', style: TextStyle(fontSize: 11, color: AppColors.textTertiary))),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _aboutRow(IconData ic, String t) => Row(children: [Icon(ic, size: 16, color: AppColors.textTertiary), const SizedBox(width: S.x8), Text(t, style: TextStyle(fontSize: 13, color: AppColors.textSecondary))]);
+  /// Pick the first active storefront location as the brand's "primary"
+  /// contact point. We intentionally prefer `type == 'store'` over
+  /// showrooms/warehouses so the About sheet always shows a public
+  /// address. Returns null if the request fails or no store is found.
+  Future<Map<String, dynamic>?> _fetchPrimaryStore() async {
+    try {
+      final response = await ApiService.dio.get('/api/v1/locations');
+      final raw = response.data;
+      if (raw is! List) return null;
+      Map<String, dynamic>? fallback;
+      for (final item in raw) {
+        if (item is Map<String, dynamic>) {
+          fallback ??= item;
+          if (item['type'] == 'store') {
+            return item;
+          }
+        }
+      }
+      return fallback;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _aboutRow(IconData ic, String t) => Row(children: [Icon(ic, size: 16, color: AppColors.textTertiary), const SizedBox(width: S.x8), Expanded(child: Text(t, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)))]);
 
   void _showThemePicker(BuildContext context) {
     final themeProv = context.read<ThemeProvider>();
@@ -838,61 +617,3 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-/// A small pulsing dot that indicates the QR code is live/rotating.
-class _ProfileQrPulseIndicator extends StatefulWidget {
-  @override
-  State<_ProfileQrPulseIndicator> createState() =>
-      _ProfileQrPulseIndicatorState();
-}
-
-class _ProfileQrPulseIndicatorState extends State<_ProfileQrPulseIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween<double>(begin: 0.3, end: 1.0).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: Colors.green,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Text(
-            'LIVE',
-            style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w700,
-              color: Colors.green,
-              letterSpacing: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

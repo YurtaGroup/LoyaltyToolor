@@ -22,7 +22,7 @@ class AppUser {
   factory AppUser.fromJson(Map<String, dynamic> json) {
     return AppUser(
       id: json['id'] as String? ?? '',
-      name: json['full_name'] as String? ?? '',
+      name: (json['name'] ?? json['full_name']) as String? ?? '',
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String?,
       avatarUrl: json['avatar_url'] as String?,

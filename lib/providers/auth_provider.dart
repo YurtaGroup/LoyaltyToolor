@@ -37,8 +37,22 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return data['otp_code'] as String?;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 429) {
+        _error = 'Слишком много запросов, подождите немного';
+      } else if (code == 422) {
+        _error = 'Некорректный номер телефона';
+      } else if (code == 502 || code == 503 || code == 504) {
+        _error = 'Сервер недоступен, попробуйте ещё раз';
+      } else {
+        _error = 'Ошибка отправки кода';
+      }
+      _isLoading = false;
+      notifyListeners();
+      return null;
     } catch (e) {
-      _error = 'Ошибка отправки кода: $e';
+      _error = 'Ошибка отправки кода';
       _isLoading = false;
       notifyListeners();
       return null;
@@ -53,8 +67,21 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await ApiService.verifyOtp(phone, otpCode);
+    } on DioException catch (e) {
+      // Only a 4xx from /auth/verify-otp means the code is actually
+      // wrong. Network errors, 5xx, and timeouts are surfaced as
+      // "server unavailable" so the user does not blame the code.
+      final code = e.response?.statusCode;
+      if (code != null && code >= 400 && code < 500) {
+        _error = 'Неверный код';
+      } else {
+        _error = 'Сервер недоступен, попробуйте ещё раз';
+      }
+      _isLoading = false;
+      notifyListeners();
+      return;
     } catch (e) {
-      _error = 'Неверный код';
+      _error = 'Ошибка: $e';
       _isLoading = false;
       notifyListeners();
       return;
@@ -138,7 +165,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       final response = await ApiService.dio.get('/api/v1/loyalty/me/qr');
       final data = response.data as Map<String, dynamic>;
-      _qrToken = data['qr_token'] as String?;
+      _qrToken = data['qr_code'] as String?;
       notifyListeners();
     } catch (e) {
       debugPrint('[AuthProvider] fetchQrToken error: $e');

@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -735,6 +736,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (_deliveryType == 'pickup' && _selectedPickupLocation != null) {
         if (_selectedPickupLocation!.id != null) {
           orderData['pickup_location_id'] = _selectedPickupLocation!.id;
+          orderData['location_id'] = _selectedPickupLocation!.id;
         }
       }
 
@@ -743,7 +745,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
 
       if (_notesCtrl.text.trim().isNotEmpty) {
-        orderData['delivery_notes'] = _notesCtrl.text.trim();
+        orderData['delivery_comment'] = _notesCtrl.text.trim();
       }
 
       final response = await ApiService.dio.post(
@@ -782,6 +784,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // ─── Finik Payment ───────────────────────────────────────────────
 
   Widget _finikPayStep() {
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(S.x32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.desktop_mac_rounded,
+                  size: 48, color: AppColors.textTertiary),
+              const SizedBox(height: S.x16),
+              Text(
+                'Оплата доступна только в мобильном приложении',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 15, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: S.x24),
+              OutlinedButton(
+                onPressed: () => setState(() => _step = _Step.delivery),
+                child: const Text('НАЗАД'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final requestId = const Uuid().v4();
 
     return FinikProvider(

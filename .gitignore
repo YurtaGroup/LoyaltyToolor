@@ -1,6 +1,7 @@
 # Environment / secrets
 .env
 .env.local
+dart_defines.json
 
 # Miscellaneous
 *.class

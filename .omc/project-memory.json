@@ -1,0 +1,337 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776606680560,
+  "projectRoot": "/Users/izzat/PycharmProjects/LoyaltyToolor",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "assets",
+      "docs",
+      "lib",
+      "test"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "android": {
+      "path": "android",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1776606680556,
+      "keyFiles": [
+        "build.gradle.kts",
+        "gradle.properties",
+        "local.properties",
+        "settings.gradle.kts"
+      ]
+    },
+    "assets": {
+      "path": "assets",
+      "purpose": "Static assets",
+      "fileCount": 0,
+      "lastAccessed": 1776606680556,
+      "keyFiles": []
+    },
+    "build": {
+      "path": "build",
+      "purpose": "Build output",
+      "fileCount": 1,
+      "lastAccessed": 1776606680556,
+      "keyFiles": [
+        "6ab642d2d29d49c7c5f5a6d85fcef46b.cache.dill.track.dill"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 0,
+      "lastAccessed": 1776606680556,
+      "keyFiles": []
+    },
+    "ios": {
+      "path": "ios",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1776606680556,
+      "keyFiles": [
+        "ExportOptions.plist",
+        "Podfile",
+        "Podfile.lock"
+      ]
+    },
+    "lib": {
+      "path": "lib",
+      "purpose": "Library code",
+      "fileCount": 1,
+      "lastAccessed": 1776606680557,
+      "keyFiles": [
+        "main.dart"
+      ]
+    },
+    "linux": {
+      "path": "linux",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776606680557,
+      "keyFiles": [
+        "CMakeLists.txt"
+      ]
+    },
+    "macos": {
+      "path": "macos",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1776606680557,
+      "keyFiles": [
+        "Podfile",
+        "Podfile.lock"
+      ]
+    },
+    "test": {
+      "path": "test",
+      "purpose": "Test files",
+      "fileCount": 1,
+      "lastAccessed": 1776606680557,
+      "keyFiles": [
+        "widget_test.dart"
+      ]
+    },
+    "web": {
+      "path": "web",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1776606680557,
+      "keyFiles": [
+        "favicon.png",
+        "index.html",
+        "manifest.json"
+      ]
+    },
+    "windows": {
+      "path": "windows",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776606680557,
+      "keyFiles": [
+        "CMakeLists.txt"
+      ]
+    },
+    "android/app": {
+      "path": "android/app",
+      "purpose": "Application code",
+      "fileCount": 1,
+      "lastAccessed": 1776606680558,
+      "keyFiles": [
+        "build.gradle.kts"
+      ]
+    },
+    "lib/data": {
+      "path": "lib/data",
+      "purpose": "Data files",
+      "fileCount": 1,
+      "lastAccessed": 1776606680558,
+      "keyFiles": [
+        "toolor_products.dart"
+      ]
+    },
+    "lib/models": {
+      "path": "lib/models",
+      "purpose": "Data models",
+      "fileCount": 7,
+      "lastAccessed": 1776606680559,
+      "keyFiles": [
+        "app_notification.dart",
+        "banner.dart",
+        "cart_item.dart"
+      ]
+    },
+    "lib/services": {
+      "path": "lib/services",
+      "purpose": "Business logic services",
+      "fileCount": 3,
+      "lastAccessed": 1776606680559,
+      "keyFiles": [
+        "analytics_service.dart",
+        "api_service.dart",
+        "device_id_service.dart"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "lib/screens/checkout_screen.dart",
+      "accessCount": 16,
+      "lastAccessed": 1776607499526,
+      "type": "file"
+    },
+    {
+      "path": "lib/providers/cart_provider.dart",
+      "accessCount": 11,
+      "lastAccessed": 1776608381040,
+      "type": "directory"
+    },
+    {
+      "path": "lib/main.dart",
+      "accessCount": 9,
+      "lastAccessed": 1776186218319,
+      "type": "file"
+    },
+    {
+      "path": "lib/services/api_service.dart",
+      "accessCount": 9,
+      "lastAccessed": 1776607510990,
+      "type": "file"
+    },
+    {
+      "path": "lib",
+      "accessCount": 9,
+      "lastAccessed": 1776607758127,
+      "type": "directory"
+    },
+    {
+      "path": "lib/screens/product_detail_screen.dart",
+      "accessCount": 9,
+      "lastAccessed": 1776607764082,
+      "type": "file"
+    },
+    {
+      "path": "lib/screens/home_screen.dart",
+      "accessCount": 8,
+      "lastAccessed": 1776182682257,
+      "type": "file"
+    },
+    {
+      "path": "lib/screens/auth_screen.dart",
+      "accessCount": 7,
+      "lastAccessed": 1776183284618,
+      "type": "file"
+    },
+    {
+      "path": "lib/screens/order_detail_screen.dart",
+      "accessCount": 7,
+      "lastAccessed": 1776438757066,
+      "type": "file"
+    },
+    {
+      "path": "lib/screens/promo_codes_screen.dart",
+      "accessCount": 6,
+      "lastAccessed": 1776183132102,
+      "type": "file"
+    },
+    {
+      "path": "lib/widgets/product_card.dart",
+      "accessCount": 4,
+      "lastAccessed": 1776183013979,
+      "type": "file"
+    },
+    {
+      "path": "lib/screens/cart_screen.dart",
+      "accessCount": 4,
+      "lastAccessed": 1776440054111,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 4,
+      "lastAccessed": 1776445950466,
+      "type": "directory"
+    },
+    {
+      "path": "lib/models/product.dart",
+      "accessCount": 3,
+      "lastAccessed": 1776607776049,
+      "type": "directory"
+    },
+    {
+      "path": "lib/screens/orders_screen.dart",
+      "accessCount": 2,
+      "lastAccessed": 1776439074999,
+      "type": "file"
+    },
+    {
+      "path": "pubspec.yaml",
+      "accessCount": 2,
+      "lastAccessed": 1776445954285,
+      "type": "file"
+    },
+    {
+      "path": "lib/services/device_id_service.dart",
+      "accessCount": 1,
+      "lastAccessed": 1776182383690,
+      "type": "file"
+    },
+    {
+      "path": "lib/widgets/guest_cta_card.dart",
+      "accessCount": 1,
+      "lastAccessed": 1776182624118,
+      "type": "file"
+    },
+    {
+      "path": "lib/services/analytics_service.dart",
+      "accessCount": 1,
+      "lastAccessed": 1776183208580,
+      "type": "file"
+    },
+    {
+      "path": "lib/providers/auth_provider.dart",
+      "accessCount": 1,
+      "lastAccessed": 1776183628473,
+      "type": "file"
+    },
+    {
+      "path": "lib/models/order.dart",
+      "accessCount": 1,
+      "lastAccessed": 1776440054273,
+      "type": "file"
+    },
+    {
+      "path": "lib/models",
+      "accessCount": 1,
+      "lastAccessed": 1776440564432,
+      "type": "directory"
+    },
+    {
+      "path": "ios/Flutter/AppframeworkInfo.plist",
+      "accessCount": 1,
+      "lastAccessed": 1776454315382,
+      "type": "file"
+    },
+    {
+      "path": "lib/models/cart_item.dart",
+      "accessCount": 1,
+      "lastAccessed": 1776607758356,
+      "type": "file"
+    },
+    {
+      "path": "dart_defines.json",
+      "accessCount": 1,
+      "lastAccessed": 1776613927640,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/product.dart';
@@ -213,13 +214,44 @@ class CartProvider extends ChangeNotifier {
     }
 
     for (final item in _items) {
-      await ApiService.dio.post('/api/v1/cart', data: {
+      await _postCartItemWithFallback(item);
+    }
+  }
+
+  /// POST a cart item, retrying with relaxed matching on 404 so a stale
+  /// size/color combo (or a sparse variant matrix where the picked
+  /// (size, color) pair isn't a real variant) doesn't break checkout.
+  Future<void> _postCartItemWithFallback(CartItem item) async {
+    final attempts = <Map<String, dynamic>>[
+      {
         'product_id': item.product.id,
         'selected_size': item.selectedSize,
         'selected_color': item.selectedColor,
         'quantity': item.quantity,
-      });
+      },
+      if (item.selectedColor.isNotEmpty)
+        {
+          'product_id': item.product.id,
+          'selected_size': item.selectedSize,
+          'quantity': item.quantity,
+        },
+      {
+        'product_id': item.product.id,
+        'quantity': item.quantity,
+      },
+    ];
+
+    DioException? lastError;
+    for (final data in attempts) {
+      try {
+        await ApiService.dio.post('/api/v1/cart', data: data);
+        return;
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 404) rethrow;
+        lastError = e;
+      }
     }
+    if (lastError != null) throw lastError;
   }
 
   // ── Individual backend operations (fire-and-forget) ───────────────────
